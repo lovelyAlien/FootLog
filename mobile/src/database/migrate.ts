@@ -1,7 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 const VERSION_1_SCHEMA = `
-PRAGMA journal_mode = WAL;
 CREATE TABLE IF NOT EXISTS check_ins (
   id TEXT PRIMARY KEY NOT NULL,
   checked_in_at TEXT NOT NULL,
@@ -27,6 +26,8 @@ export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
   const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
 
   if ((version?.user_version ?? 0) < 1) {
+    await db.execAsync('PRAGMA journal_mode = WAL;');
+
     await db.withTransactionAsync(async () => {
       await db.execAsync(VERSION_1_SCHEMA);
     });
