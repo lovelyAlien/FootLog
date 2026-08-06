@@ -2,7 +2,7 @@
 
 매일 시간 단위로 위치를 "체크인"해서 자신의 이동 패턴을 공간적으로 회고하는 앱. 반복되는 동선과 새로 가본 곳을 구분해 인식하게 하여, 더 다양한 장소를 탐험하도록 동기를 부여하는 것이 목표.
 
-전체 설계는 [docs/superpowers/specs/2026-08-02-location-checkin-diary-design.md](docs/superpowers/specs/2026-08-02-location-checkin-diary-design.md)를 참조. 아직 구현 전 단계이며, 이 파일은 코드가 추가되면서 계속 갱신되어야 함.
+기반 설계는 [docs/superpowers/specs/2026-08-02-location-checkin-diary-design.md](docs/superpowers/specs/2026-08-02-location-checkin-diary-design.md), 승인된 핵심 UX와 최신 MVP 범위는 [docs/superpowers/specs/2026-08-06-core-ux-flow-design.md](docs/superpowers/specs/2026-08-06-core-ux-flow-design.md)를 참조. 두 문서가 충돌하면 UX와 MVP 범위에는 후자를 우선 적용한다. 아직 구현 전 단계이며, 문서는 코드가 추가되면서 계속 갱신되어야 함.
 
 ## 스택
 
@@ -26,5 +26,6 @@
 
 ## MVP 범위
 
-포함: 체크인 기록, 캘린더로 과거 로그 다시보기, 하루 단위 자동 요약(지도 핀 모음)
-제외 (v2 후보): 자주 가는 곳/새로운 곳 분석·시각화, 역지오코딩 기반 장소명 표시, 다기기 실시간 설정 동기화, 그룹/소셜 공유
+포함: 사용자 확인 체크인, 사진 1장·짧은 메모, 사진 서버 백업, 캘린더와 지도 중심 일일 회고, 날짜별 회고 본문·선택 알림, 객관적 주간 발견
+
+제외: 역지오코딩, 회고 자동 분석, 탐험 추천·점수화, 여러 사진·영상·음성, 백그라운드 경로 추적, 그룹·소셜 공유
