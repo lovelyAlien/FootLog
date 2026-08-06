@@ -1,4 +1,7 @@
-import { startNotificationResponseRouting } from '../src/features/notifications/notificationResponseRouting';
+import {
+  configureForegroundNotificationPresentation,
+  startNotificationResponseRouting,
+} from '../src/features/notifications/notificationResponseRouting';
 
 function checkInResponse(identifier: string) {
   return {
@@ -62,5 +65,22 @@ describe('startNotificationResponseRouting', () => {
     await Promise.resolve();
 
     expect(navigate).not.toHaveBeenCalled();
+  });
+});
+
+describe('configureForegroundNotificationPresentation', () => {
+  it('shows foreground notifications in the banner and notification list with alert sound', async () => {
+    const source = { setNotificationHandler: jest.fn() };
+
+    configureForegroundNotificationPresentation(source);
+
+    expect(source.setNotificationHandler).toHaveBeenCalledTimes(1);
+    const handler = source.setNotificationHandler.mock.calls[0][0];
+    await expect(handler.handleNotification()).resolves.toEqual({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    });
   });
 });

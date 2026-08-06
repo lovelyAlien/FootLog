@@ -183,4 +183,67 @@ describe('ExpoNotificationScheduler', () => {
     });
     expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
   });
+
+  it('cancels every newly-created notification when settings persistence fails', async () => {
+    const persistenceError = new Error('settings persistence failed');
+    const repository = createRepository({
+      enabled: false,
+      startHour: 7,
+      endHour: 23,
+      scheduledIds: [],
+    });
+    repository.setNotificationSettings
+      .mockRejectedValueOnce(persistenceError)
+      .mockResolvedValueOnce(undefined);
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(persistenceError);
+
+    expect(mockCancelScheduledNotificationAsync.mock.calls).toEqual([
+      ['new-1'],
+      ['new-2'],
+      ['new-3'],
+      ['new-4'],
+    ]);
+  });
+
+  it('best-effort cancels notifications created before a partial scheduling failure', async () => {
+    const schedulingError = new Error('schedule failed');
+    mockScheduleNotificationAsync
+      .mockReset()
+      .mockResolvedValueOnce('partial-new-1')
+      .mockRejectedValueOnce(schedulingError);
+    const repository = createRepository({
+      enabled: false,
+      startHour: 7,
+      endHour: 23,
+      scheduledIds: [],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
+
+    expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith('partial-new-1');
+  });
+
+  it('recovers persisted settings to disabled after rebuilding fails', async () => {
+    const schedulingError = new Error('schedule failed');
+    mockScheduleNotificationAsync.mockReset().mockRejectedValueOnce(schedulingError);
+    const repository = createRepository({
+      enabled: true,
+      startHour: 7,
+      endHour: 23,
+      scheduledIds: ['old-footlog-id'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
+
+    expect(repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 10,
+      scheduledIds: [],
+    });
+  });
 });

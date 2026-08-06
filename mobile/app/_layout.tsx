@@ -12,8 +12,13 @@ import {
   NotificationSettingsProvider,
   type NotificationSettingsDependencies,
 } from '../src/features/notifications/NotificationSettingsContext';
-import { startNotificationResponseRouting } from '../src/features/notifications/notificationResponseRouting';
+import {
+  configureForegroundNotificationPresentation,
+  startNotificationResponseRouting,
+} from '../src/features/notifications/notificationResponseRouting';
 import { AppSettingsRepository } from '../src/features/settings/AppSettingsRepository';
+
+configureForegroundNotificationPresentation(Notifications);
 
 type InitializationState =
   | { status: 'loading' }

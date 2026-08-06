@@ -90,4 +90,17 @@ describe('NotificationSettingsScreen', () => {
     expect(view.getByText('종료 시간은 시작 시간보다 늦어야 해요')).toBeTruthy();
     expect(view.getByRole('button', { name: '알림 시간 저장' }).props.accessibilityState.disabled).toBe(true);
   });
+
+  it('still disables enabled reminders with the saved window when the draft is invalid', async () => {
+    const dependencies = createDependencies({ enabled: true });
+    const view = await render(<NotificationSettingsScreen {...dependencies} />);
+    await view.findByText('07:00–23:00');
+
+    await fireEvent.press(view.getByRole('button', { name: '시작 시간 23:00' }));
+    const toggle = view.getByRole('switch', { name: '시간별 체크인 알림' });
+    await act(async () => { fireEvent(toggle, 'valueChange', false); });
+
+    expect(dependencies.scheduler.disable).toHaveBeenCalledWith({ startHour: 7, endHour: 23 });
+    await waitFor(() => expect(view.getByRole('switch', { name: '시간별 체크인 알림' }).props.value).toBe(false));
+  });
 });

@@ -25,6 +25,7 @@ export function NotificationSettingsScreen({
   const [enabled, setEnabled] = useState(false);
   const [startHour, setStartHour] = useState(7);
   const [endHour, setEndHour] = useState(23);
+  const [savedWindow, setSavedWindow] = useState({ startHour: 7, endHour: 23 });
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,6 +36,7 @@ export function NotificationSettingsScreen({
         setEnabled(settings.enabled);
         setStartHour(settings.startHour);
         setEndHour(settings.endHour);
+        setSavedWindow({ startHour: settings.startHour, endHour: settings.endHour });
       })
       .catch(() => {
         if (isCurrent) setMessage('알림 설정을 불러오지 못했어요.');
@@ -50,7 +52,7 @@ export function NotificationSettingsScreen({
   const window = { startHour, endHour };
 
   const setReminderEnabled = async (nextEnabled: boolean) => {
-    if (isBusy || !isValidWindow) return;
+    if (isBusy || (nextEnabled && !isValidWindow)) return;
     setIsBusy(true);
     setMessage(null);
 
@@ -59,12 +61,14 @@ export function NotificationSettingsScreen({
         const result = await scheduler.reschedule(window);
         if (result.status === 'denied') {
           setEnabled(false);
+          setSavedWindow(window);
           setMessage('알림 권한이 꺼져 있어요. 기기 설정에서 허용한 뒤 다시 시도해 주세요.');
         } else {
           setEnabled(true);
+          setSavedWindow(window);
         }
       } else {
-        await scheduler.disable(window);
+        await scheduler.disable(savedWindow);
         setEnabled(false);
       }
     } catch {
@@ -84,10 +88,14 @@ export function NotificationSettingsScreen({
         const result = await scheduler.reschedule(window);
         if (result.status === 'denied') {
           setEnabled(false);
+          setSavedWindow(window);
           setMessage('알림 권한이 꺼져 있어요. 기기 설정에서 허용한 뒤 다시 시도해 주세요.');
+        } else {
+          setSavedWindow(window);
         }
       } else {
         await repository.setNotificationSettings({ enabled: false, ...window, scheduledIds: [] });
+        setSavedWindow(window);
       }
     } catch {
       setMessage('알림 시간을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -119,7 +127,7 @@ export function NotificationSettingsScreen({
           </View>
           <Switch
             accessibilityLabel="시간별 체크인 알림"
-            disabled={isBusy || !isValidWindow}
+            disabled={isBusy || (!enabled && !isValidWindow)}
             onValueChange={(value) => { void setReminderEnabled(value); }}
             value={enabled}
           />

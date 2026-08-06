@@ -17,6 +17,30 @@ type NotificationResponseSource = {
   ): { remove(): void };
 };
 
+type ForegroundNotificationPresentationSource = {
+  setNotificationHandler(handler: {
+    handleNotification(): Promise<{
+      shouldShowBanner: boolean;
+      shouldShowList: boolean;
+      shouldPlaySound: boolean;
+      shouldSetBadge: boolean;
+    }>;
+  }): void;
+};
+
+export function configureForegroundNotificationPresentation(
+  source: ForegroundNotificationPresentationSource,
+): void {
+  source.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowBanner: true,
+      shouldShowList: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false,
+    }),
+  });
+}
+
 export function startNotificationResponseRouting(
   source: NotificationResponseSource,
   navigate: (url: '/check-in') => void,

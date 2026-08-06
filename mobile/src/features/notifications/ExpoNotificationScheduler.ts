@@ -40,15 +40,15 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
 
     await this.cancelIdentifiers(current.scheduledIds);
 
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-        name: '시간별 체크인',
-        importance: Notifications.AndroidImportance.DEFAULT,
-      });
-    }
-
     const scheduledIds: string[] = [];
     try {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
+          name: '시간별 체크인',
+          importance: Notifications.AndroidImportance.DEFAULT,
+        });
+      }
+
       for (const date of buildHourlyCheckInTimes({ now: this.now(), window, days: 2 })) {
         const identifier = await Notifications.scheduleNotificationAsync({
           content: {
@@ -64,18 +64,19 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
         });
         scheduledIds.push(identifier);
       }
+
+      await this.settingsRepository.setNotificationSettings({
+        enabled: true,
+        ...window,
+        scheduledIds,
+      });
+
+      return { status: 'scheduled', scheduledIds };
     } catch (error) {
-      await this.cancelIdentifiers(scheduledIds);
+      await this.cancelIdentifiersBestEffort(scheduledIds);
+      await this.recoverDisabledSettings(window);
       throw error;
     }
-
-    await this.settingsRepository.setNotificationSettings({
-      enabled: true,
-      ...window,
-      scheduledIds,
-    });
-
-    return { status: 'scheduled', scheduledIds };
   }
 
   async disable(window: ActivityWindow): Promise<void> {
@@ -91,6 +92,24 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
   private async cancelIdentifiers(identifiers: string[]): Promise<void> {
     for (const identifier of identifiers) {
       await Notifications.cancelScheduledNotificationAsync(identifier);
+    }
+  }
+
+  private async cancelIdentifiersBestEffort(identifiers: string[]): Promise<void> {
+    await Promise.allSettled(
+      identifiers.map((identifier) => Notifications.cancelScheduledNotificationAsync(identifier)),
+    );
+  }
+
+  private async recoverDisabledSettings(window: ActivityWindow): Promise<void> {
+    try {
+      await this.settingsRepository.setNotificationSettings({
+        enabled: false,
+        ...window,
+        scheduledIds: [],
+      });
+    } catch {
+      // Keep the original scheduling/persistence failure for the caller.
     }
   }
 }
