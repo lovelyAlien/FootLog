@@ -1,4 +1,5 @@
-import { Stack } from 'expo-router';
+import * as Notifications from 'expo-notifications';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -6,22 +7,53 @@ import { FootLogRepositoryProvider } from '../src/database/FootLogContext';
 import { openFootLogDatabase } from '../src/database/openDatabase';
 import { SQLiteCheckInRepository } from '../src/features/check-in/SQLiteCheckInRepository';
 import type { CheckInRepository } from '../src/features/check-in/domain';
+import { ExpoNotificationScheduler } from '../src/features/notifications/ExpoNotificationScheduler';
+import {
+  NotificationSettingsProvider,
+  type NotificationSettingsDependencies,
+} from '../src/features/notifications/NotificationSettingsContext';
+import { startNotificationResponseRouting } from '../src/features/notifications/notificationResponseRouting';
+import { AppSettingsRepository } from '../src/features/settings/AppSettingsRepository';
 
 type InitializationState =
   | { status: 'loading' }
-  | { status: 'ready'; repository: CheckInRepository }
+  | {
+      status: 'ready';
+      repository: CheckInRepository;
+      notificationSettings: NotificationSettingsDependencies;
+    }
   | { status: 'error' };
 
 export default function RootLayout() {
+  const router = useRouter();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<InitializationState>({ status: 'loading' });
+
+  useEffect(() => {
+    if (state.status !== 'ready') return;
+
+    return startNotificationResponseRouting(
+      Notifications,
+      (url) => router.push(url),
+    );
+  }, [router, state.status]);
 
   useEffect(() => {
     let isCurrent = true;
 
     void openFootLogDatabase()
       .then((database) => {
-        if (isCurrent) setState({ status: 'ready', repository: new SQLiteCheckInRepository(database) });
+        if (isCurrent) {
+          const settingsRepository = new AppSettingsRepository(database);
+          setState({
+            status: 'ready',
+            repository: new SQLiteCheckInRepository(database),
+            notificationSettings: {
+              repository: settingsRepository,
+              scheduler: new ExpoNotificationScheduler(settingsRepository),
+            },
+          });
+        }
       })
       .catch(() => {
         if (isCurrent) setState({ status: 'error' });
@@ -56,10 +88,13 @@ export default function RootLayout() {
 
   return (
     <FootLogRepositoryProvider value={state.repository}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="check-in" options={{ title: '체크인' }} />
-      </Stack>
+      <NotificationSettingsProvider value={state.notificationSettings}>
+        <Stack>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="check-in" options={{ title: '체크인' }} />
+          <Stack.Screen name="settings/reminders" options={{ title: '체크인 알림' }} />
+        </Stack>
+      </NotificationSettingsProvider>
     </FootLogRepositoryProvider>
   );
 }

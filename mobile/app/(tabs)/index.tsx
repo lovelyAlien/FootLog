@@ -56,7 +56,11 @@ export default function TodayRoute() {
       ) : hasError ? (
         <View style={styles.centered}><Text style={styles.message}>오늘의 발자국을 불러오지 못했어요.</Text></View>
       ) : (
-        <TodayCheckIns checkIns={checkIns} onStartCheckIn={() => router.push('/check-in')} />
+        <TodayCheckIns
+          checkIns={checkIns}
+          onStartCheckIn={() => router.push('/check-in')}
+          onOpenReminderSettings={() => router.push('/settings/reminders')}
+        />
       )}
     </SafeAreaView>
   );

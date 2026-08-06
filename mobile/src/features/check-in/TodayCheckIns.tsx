@@ -5,6 +5,7 @@ import type { CheckIn } from './domain';
 type TodayCheckInsProps = {
   checkIns: CheckIn[];
   onStartCheckIn: () => void;
+  onOpenReminderSettings?: () => void;
 };
 
 function formatLocalTime(checkedInAt: string): string {
@@ -15,7 +16,7 @@ function formatLocalTime(checkedInAt: string): string {
   }).format(new Date(checkedInAt));
 }
 
-export function TodayCheckIns({ checkIns, onStartCheckIn }: TodayCheckInsProps) {
+export function TodayCheckIns({ checkIns, onStartCheckIn, onOpenReminderSettings }: TodayCheckInsProps) {
   const chronologicalCheckIns = [...checkIns].sort(
     (left, right) => Date.parse(left.checkedInAt) - Date.parse(right.checkedInAt),
   );
@@ -23,7 +24,19 @@ export function TodayCheckIns({ checkIns, onStartCheckIn }: TodayCheckInsProps) 
   return (
     <View style={styles.container}>
       <View style={styles.heading}>
-        <Text style={styles.title}>오늘</Text>
+        <View style={styles.headingRow}>
+          <Text style={styles.title}>오늘</Text>
+          {onOpenReminderSettings && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="알림 설정"
+              onPress={onOpenReminderSettings}
+              style={styles.settingsButton}
+            >
+              <Text style={styles.settingsButtonText}>알림 설정</Text>
+            </Pressable>
+          )}
+        </View>
         <Text style={styles.subtitle}>오늘 남긴 발자국</Text>
       </View>
 
@@ -58,8 +71,11 @@ export function TodayCheckIns({ checkIns, onStartCheckIn }: TodayCheckInsProps) 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, gap: 24, backgroundColor: '#ffffff' },
   heading: { gap: 6 },
+  headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { fontSize: 32, fontWeight: '700', color: '#1b1b1b' },
   subtitle: { fontSize: 16, color: '#515151' },
+  settingsButton: { borderRadius: 10, backgroundColor: '#eef2ff', paddingHorizontal: 12, paddingVertical: 9 },
+  settingsButtonText: { color: '#2948a8', fontSize: 14, fontWeight: '700' },
   emptyState: { flex: 1, justifyContent: 'center', gap: 8 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: '#1b1b1b' },
   emptyBody: { fontSize: 16, lineHeight: 24, color: '#515151' },

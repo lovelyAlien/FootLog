@@ -64,6 +64,21 @@ describe('TodayCheckIns', () => {
     expect(onStartCheckIn).toHaveBeenCalledTimes(1);
   });
 
+  it('opens reminder settings from the Today header', async () => {
+    const onOpenReminderSettings = jest.fn();
+    const view = await render(
+      <TodayCheckIns
+        checkIns={[]}
+        onStartCheckIn={jest.fn()}
+        onOpenReminderSettings={onOpenReminderSettings}
+      />,
+    );
+
+    await fireEvent.press(view.getByRole('button', { name: '알림 설정' }));
+
+    expect(onOpenReminderSettings).toHaveBeenCalledTimes(1);
+  });
+
   it('refreshes after the check-in route regains focus', async () => {
     mockRepository = {
       listByLocalDay: jest.fn()
