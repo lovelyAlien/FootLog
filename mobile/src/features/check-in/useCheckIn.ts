@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 
 import { checkInReducer, initialCheckInState, type CheckInAction, type CheckInState } from './checkInReducer';
 import { createCheckIn } from './createCheckIn';
-import type { CheckInRepository, LocationGateway } from './domain';
+import type { CheckInRepository, LocationFix, LocationGateway } from './domain';
 
 export type CheckInDependencies = {
   locationGateway: LocationGateway;
@@ -15,6 +15,7 @@ export type UseCheckInResult = {
   state: CheckInState;
   findLocation(): Promise<void>;
   confirm(): Promise<void>;
+  retrySave(): Promise<void>;
 };
 
 export function useCheckIn(deps: CheckInDependencies): UseCheckInResult {
@@ -46,14 +47,33 @@ export function useCheckIn(deps: CheckInDependencies): UseCheckInResult {
     }
   }, [deps.locationGateway, dispatch]);
 
+  const saveFix = useCallback(async (fix: LocationFix) => {
+    try {
+      const checkIn = await createCheckIn(fix, deps);
+      dispatch({ type: 'SAVE_SUCCEEDED', checkIn });
+    } catch (error) {
+      dispatch({
+        type: 'SAVE_FAILED',
+        message: error instanceof Error ? error.message : '체크인을 저장하지 못했습니다.',
+      });
+    }
+  }, [deps, dispatch]);
+
   const confirm = useCallback(async () => {
     const currentState = stateRef.current;
     if (currentState.status !== 'ready') return;
 
     dispatch({ type: 'CONFIRM_PRESSED' });
-    const checkIn = await createCheckIn(currentState.fix, deps);
-    dispatch({ type: 'SAVE_SUCCEEDED', checkIn });
-  }, [deps, dispatch]);
+    await saveFix(currentState.fix);
+  }, [dispatch, saveFix]);
 
-  return { state, findLocation, confirm };
+  const retrySave = useCallback(async () => {
+    const currentState = stateRef.current;
+    if (currentState.status !== 'save-error') return;
+
+    dispatch({ type: 'SAVE_RETRY_PRESSED' });
+    await saveFix(currentState.fix);
+  }, [dispatch, saveFix]);
+
+  return { state, findLocation, confirm, retrySave };
 }

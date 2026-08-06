@@ -54,6 +54,29 @@ class FakeCheckInRepository implements CheckInRepository {
   async deleteById(): Promise<void> {}
 }
 
+class RejectOnceCheckInRepository extends FakeCheckInRepository {
+  attempted: CheckIn[] = [];
+
+  async save(checkIn: CheckIn): Promise<void> {
+    this.attempted.push(checkIn);
+    if (this.attempted.length === 1) throw new Error('저장 공간을 사용할 수 없어요.');
+    await super.save(checkIn);
+  }
+}
+
+class CountingLocationGateway implements LocationGateway {
+  calls = 0;
+
+  async requestForegroundPermission(): Promise<'granted'> {
+    return 'granted';
+  }
+
+  async getCurrentFix(): Promise<LocationFix> {
+    this.calls += 1;
+    return this.calls === 1 ? fix : { ...fix, accuracyM: 18 };
+  }
+}
+
 async function renderScreen(
   locationGateway: LocationGateway = new FakeLocationGateway(),
   repository = new FakeCheckInRepository(),
@@ -92,6 +115,8 @@ describe('CheckInScreen', () => {
 
     await waitFor(() => expect(screen.getByTestId('check-in-map-pin')).toBeTruthy());
 
+    expect(screen.getByTestId('check-in-map-pin').props.draggable).toBe(false);
+    expect(screen.getByTestId('check-in-accuracy-circle').props.radius).toBe(42);
     expect(screen.getByText('정확도 약 42m')).toBeTruthy();
     expect(screen.getByRole('button', { name: '다시 찾기' })).toBeTruthy();
     expect(screen.getByRole('button', { name: '이 위치에 체크인' })).toBeTruthy();
@@ -104,12 +129,68 @@ describe('CheckInScreen', () => {
     expect(repository.saved).toEqual([]);
 
     await act(async () => {
-      fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
     await waitFor(() => expect(repository.saved).toHaveLength(1));
+  });
+
+  it('does not save when 다시 찾기 refreshes the location', async () => {
+    const locationGateway = new CountingLocationGateway();
+    const repository = new FakeCheckInRepository();
+    await renderScreen(locationGateway, repository);
+
+    await waitFor(() => expect(screen.getByText('정확도 약 42m')).toBeTruthy());
+    await act(async () => {
+      await fireEvent.press(screen.getByRole('button', { name: '다시 찾기' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText('정확도 약 18m')).toBeTruthy());
+    expect(locationGateway.calls).toBe(2);
+    expect(repository.saved).toEqual([]);
+  });
+
+  it('saves once when 이 위치에 체크인 receives two presses', async () => {
+    const { repository } = await renderScreen();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 위치에 체크인' })).toBeTruthy());
+    await act(async () => {
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText('완료')).toBeTruthy());
+    expect(repository.saved).toHaveLength(1);
+  });
+
+  it('retries a failed local save with the same fix and persists it once', async () => {
+    const repository = new RejectOnceCheckInRepository();
+    await renderScreen(new FakeLocationGateway(), repository);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 위치에 체크인' })).toBeTruthy());
+    await act(async () => {
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 위치에 다시 체크인' })).toBeTruthy());
+    await act(async () => {
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 다시 체크인' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByText('완료')).toBeTruthy());
+    expect(repository.saved).toHaveLength(1);
+    expect(repository.attempted).toHaveLength(2);
+    expect(repository.attempted[1]).toEqual(repository.attempted[0]);
   });
 
   it('shows settings guidance after permission denial', async () => {
@@ -129,7 +210,7 @@ describe('CheckInScreen', () => {
 
     await waitFor(() => expect(screen.getByRole('button', { name: '이 위치에 체크인' })).toBeTruthy());
     await act(async () => {
-      fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
       await Promise.resolve();
       await Promise.resolve();
     });

@@ -27,7 +27,7 @@ function ActionButton({ label, onPress, primary = false }: {
 }
 
 export function CheckInScreen({ deps }: CheckInScreenProps) {
-  const { state, findLocation, confirm } = useCheckIn(deps);
+  const { state, findLocation, confirm, retrySave } = useCheckIn(deps);
 
   useEffect(() => {
     void findLocation();
@@ -52,6 +52,16 @@ export function CheckInScreen({ deps }: CheckInScreenProps) {
         <Text style={styles.title}>위치를 가져오지 못했어요</Text>
         <Text style={styles.body}>{state.message}</Text>
         <ActionButton label="다시 시도" onPress={() => { void findLocation(); }} />
+      </ScreenContainer>
+    );
+  }
+
+  if (state.status === 'save-error') {
+    return (
+      <ScreenContainer>
+        <Text style={styles.title}>체크인을 저장하지 못했어요</Text>
+        <Text style={styles.body}>{state.message}</Text>
+        <ActionButton label="이 위치에 다시 체크인" onPress={() => { void retrySave(); }} primary />
       </ScreenContainer>
     );
   }
