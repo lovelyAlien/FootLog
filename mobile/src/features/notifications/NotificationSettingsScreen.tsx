@@ -1,8 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import type { NotificationSettingsRepository } from '../settings/AppSettingsRepository';
+import type {
+  NotificationSettings,
+  NotificationSettingsRepository,
+} from '../settings/AppSettingsRepository';
 import type { NotificationScheduler } from './ExpoNotificationScheduler';
 
 type NotificationSettingsScreenProps = {
@@ -28,15 +31,23 @@ export function NotificationSettingsScreen({
   const [savedWindow, setSavedWindow] = useState({ startHour: 7, endHour: 23 });
   const [message, setMessage] = useState<string | null>(null);
 
+  const applySettings = useCallback((settings: NotificationSettings) => {
+    const authoritativeWindow = {
+      startHour: settings.startHour,
+      endHour: settings.endHour,
+    };
+    setEnabled(settings.enabled);
+    setStartHour(settings.startHour);
+    setEndHour(settings.endHour);
+    setSavedWindow(authoritativeWindow);
+  }, []);
+
   useEffect(() => {
     let isCurrent = true;
     void repository.getNotificationSettings()
       .then((settings) => {
         if (!isCurrent) return;
-        setEnabled(settings.enabled);
-        setStartHour(settings.startHour);
-        setEndHour(settings.endHour);
-        setSavedWindow({ startHour: settings.startHour, endHour: settings.endHour });
+        applySettings(settings);
       })
       .catch(() => {
         if (isCurrent) setMessage('알림 설정을 불러오지 못했어요.');
@@ -46,7 +57,17 @@ export function NotificationSettingsScreen({
       });
 
     return () => { isCurrent = false; };
-  }, [repository]);
+  }, [applySettings, repository]);
+
+  const syncAfterFailure = async (errorMessage: string) => {
+    try {
+      applySettings(await repository.getNotificationSettings());
+    } catch {
+      // Scheduling failed and cleanup is conservative, so do not leave the UI claiming it is on.
+      setEnabled(false);
+    }
+    setMessage(errorMessage);
+  };
 
   const isValidWindow = startHour < endHour;
   const window = { startHour, endHour };
@@ -72,7 +93,7 @@ export function NotificationSettingsScreen({
         setEnabled(false);
       }
     } catch {
-      setMessage('알림 설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.');
+      await syncAfterFailure('알림 설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsBusy(false);
     }
@@ -98,7 +119,7 @@ export function NotificationSettingsScreen({
         setSavedWindow(window);
       }
     } catch {
-      setMessage('알림 시간을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      await syncAfterFailure('알림 시간을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       setIsBusy(false);
     }
