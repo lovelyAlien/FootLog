@@ -33,10 +33,12 @@ npx expo-doctor
 
 로컬 개발 클라이언트 빌드는 플랫폼별로 실행한다.
 
+iOS Simulator 빌드는 CocoaPods 1.17.0과 iPhone 17 Pro Simulator에서 아래 명령으로 검증했다. `--no-bundler`는 별도로 실행 중인 Metro를 사용하거나 native build/install/open만 확인할 때 사용한다.
+
 ```bash
 cd mobile
 nvm use 24
-npx expo run:ios
+npx expo run:ios --no-bundler
 npx expo run:android
 ```
 

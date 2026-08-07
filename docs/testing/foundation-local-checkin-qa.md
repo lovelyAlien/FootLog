@@ -10,7 +10,7 @@
 - 모바일 런타임: Node.js `v24.19.0`, npm `11.17.0`
 - 백엔드 대상 런타임: JDK `21.0.6`, Gradle Wrapper `8.14.4`
 
-Expo Doctor 전체 통과, 최소 한 대의 실제 기기 개발 빌드, 오프라인 재시작 보존, 알림 탭 라우팅을 아직 입증하지 못했으므로 이 슬라이스는 완료로 판정하지 않는다.
+최소 한 대의 실제 기기 개발 빌드, 오프라인 재시작 보존, 실제 알림 탭 라우팅과 권한 프롬프트를 아직 입증하지 못했으므로 이 슬라이스는 완료로 판정하지 않는다.
 
 ## 재현 명령과 실제 결과
 
@@ -23,7 +23,7 @@ Expo Doctor 전체 통과, 최소 한 대의 실제 기기 개발 빌드, 오프
 | `npm test` | 0 | 14/14 test suites, 63/63 tests 통과 |
 | `npm run typecheck` | 0 | TypeScript 오류 없음 |
 | `npm run lint` | 0 | lint 오류 없음 |
-| `npx expo-doctor` | 1 | 온라인 실행에서 20개 중 19개 통과, CocoaPods native tooling 검사만 실패 |
+| `npx expo-doctor` | 0 | 온라인 실행에서 20/20 검사 통과 |
 
 SDK 57 권장 버전으로 정렬된 패키지:
 
@@ -36,7 +36,7 @@ SDK 57 권장 버전으로 정렬된 패키지:
 
 `package.json`과 lockfile이 함께 갱신됐다. `npx expo install --check`는 로컬 SDK map 기준 “Dependencies are up to date”와 종료 코드 0을 반환했고, 이후 온라인 `expo-doctor`에서도 기존 여섯 dependency mismatch가 모두 해소됐다.
 
-남은 Expo Doctor blocker는 CocoaPods CLI 부재뿐이다. Doctor는 CocoaPods `1.15.2` 이상 설치를 권장했다.
+CocoaPods `1.17.0` 설치 후 온라인 Expo Doctor의 native tooling 검사를 포함한 전체 검사가 통과했다.
 
 재검증 명령:
 
@@ -62,12 +62,12 @@ Task 8의 기존 통과 증거와 별개로 Task 9에서 fresh backend verificat
 
 ### 개발 클라이언트
 
-| 플랫폼 | 명령 | 상태 | blocker |
+| 플랫폼 | 명령 | 상태 | 실제 결과 / blocker |
 | --- | --- | --- | --- |
-| iOS | `npx expo run:ios` | 미검증 | Xcode 26.6은 설치되어 있으나 CocoaPods CLI가 없고 자동 설치가 실패했다. CoreSimulatorService/Simulator device ID도 사용할 수 없었다. 실행 당시 8081 포트도 다른 프로세스가 사용 중이었다. |
+| iOS Simulator | `npx expo run:ios --no-bundler` | 검증 | Node.js 24와 CocoaPods 1.17.0으로 Pods 설치 및 Xcode build 성공(0 errors, 2 warnings). iPhone 17 Pro Simulator에 `FootLog.app` 설치 후 `com.footlog.app` 실행 성공. CLI의 Metro 8081 연결 대기는 build/install/open 확인 후 Ctrl-C로 종료했으며 종료 코드 0. |
 | Android | `npx expo run:android` | 미검증 | 기본 Android SDK 경로(`/Users/lovelyalien/Library/Android/sdk`)가 없고 `ANDROID_HOME`이 설정되지 않았으며 `adb` 실행 파일도 없다. |
 
-두 플랫폼 모두 앱 빌드·설치·실행 성공으로 표시하지 않는다. 실제 기기 검증에는 각 플랫폼 SDK/도구, 연결된 실제 기기, 개발 클라이언트가 필요하다.
+iOS Simulator 개발 빌드·설치·실행은 검증했다. Android와 실제 iPhone은 검증하지 않았으며, completion gate의 실제 기기 증거로 Simulator 결과를 대신 사용하지 않는다.
 
 ## 정적 검사와 clean prebuild 결과
 
@@ -98,7 +98,6 @@ Task 8의 기존 통과 증거와 별개로 Task 9에서 fresh backend verificat
 
 ## 재검증 순서
 
-1. CocoaPods 1.15.2 이상을 설치하고 Node.js 24에서 `npx expo-doctor`를 다시 실행한다.
-2. iOS Simulator 또는 실제 iPhone을 준비해 `npx expo run:ios`를 실행한다.
-3. Android SDK, `ANDROID_HOME`, `adb`, Emulator 또는 실제 Android 기기를 준비해 `npx expo run:android`를 실행한다.
-4. 네트워크를 끈 상태의 체크인과 앱 재시작 보존, 실제 로컬 알림 탭을 포함해 위 체크리스트를 수행한다.
+1. 실제 iPhone에 development client를 빌드·설치하고 실행한다.
+2. Android SDK, `ANDROID_HOME`, `adb`, Emulator 또는 실제 Android 기기를 준비해 `npx expo run:android`를 실행한다.
+3. 실제 기기에서 네트워크를 끈 상태의 체크인과 앱 재시작 보존, 실제 로컬 알림 탭과 권한 프롬프트를 포함해 위 체크리스트를 수행한다.
