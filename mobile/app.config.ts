@@ -24,8 +24,12 @@ const config: ExpoConfig = {
     [
       'expo-location',
       {
+        locationAlwaysAndWhenInUsePermission: false,
+        locationAlwaysPermission: false,
         locationWhenInUsePermission:
           '체크인할 현재 위치를 확인하기 위해 위치 권한이 필요합니다.',
+        isIosBackgroundLocationEnabled: false,
+        isAndroidBackgroundLocationEnabled: false,
       },
     ],
     ['expo-notifications', { defaultChannel: 'hourly-check-ins' }],

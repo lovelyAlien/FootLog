@@ -80,6 +80,7 @@ class CountingLocationGateway implements LocationGateway {
 async function renderScreen(
   locationGateway: LocationGateway = new FakeLocationGateway(),
   repository = new FakeCheckInRepository(),
+  onViewToday = jest.fn(),
 ) {
   const view = await render(
     <CheckInScreen
@@ -89,9 +90,10 @@ async function renderScreen(
         uuid: () => '11111111-1111-4111-8111-111111111111',
         now: () => '2026-08-06T00:00:03.000Z',
       }}
+      onViewToday={onViewToday}
     />,
   );
-  return { repository, view };
+  return { onViewToday, repository, view };
 }
 
 describe('CheckInScreen', () => {
@@ -217,5 +219,24 @@ describe('CheckInScreen', () => {
 
     await waitFor(() => expect(screen.getByText('완료')).toBeTruthy());
     expect(screen.getByRole('button', { name: '오늘의 발자국 보기' })).toBeTruthy();
+  });
+
+  it('opens 오늘의 발자국 exactly once only after its completion button is pressed', async () => {
+    const onViewToday = jest.fn();
+    await renderScreen(new FakeLocationGateway(), new FakeCheckInRepository(), onViewToday);
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '이 위치에 체크인' })).toBeTruthy());
+    await act(async () => {
+      await fireEvent.press(screen.getByRole('button', { name: '이 위치에 체크인' }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.getByRole('button', { name: '오늘의 발자국 보기' })).toBeTruthy());
+    expect(onViewToday).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByRole('button', { name: '오늘의 발자국 보기' }));
+
+    expect(onViewToday).toHaveBeenCalledTimes(1);
   });
 });

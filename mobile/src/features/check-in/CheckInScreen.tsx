@@ -7,6 +7,7 @@ import { useCheckIn, type CheckInDependencies } from './useCheckIn';
 
 type CheckInScreenProps = {
   deps: CheckInDependencies;
+  onViewToday: () => void;
 };
 
 function ActionButton({ label, onPress, primary = false }: {
@@ -26,7 +27,7 @@ function ActionButton({ label, onPress, primary = false }: {
   );
 }
 
-export function CheckInScreen({ deps }: CheckInScreenProps) {
+export function CheckInScreen({ deps, onViewToday }: CheckInScreenProps) {
   const { state, findLocation, confirm, retrySave } = useCheckIn(deps);
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export function CheckInScreen({ deps }: CheckInScreenProps) {
       <ScreenContainer>
         <Text style={styles.title}>완료</Text>
         <Text style={styles.body}>이 위치에 체크인했어요.</Text>
-        <ActionButton label="오늘의 발자국 보기" onPress={() => {}} />
+        <ActionButton label="오늘의 발자국 보기" onPress={onViewToday} />
       </ScreenContainer>
     );
   }
