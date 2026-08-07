@@ -4,7 +4,9 @@
 
 - 상태: **미완료 / 차단됨**
 - 검증 일시: 2026-08-07 (Asia/Seoul)
-- 기준 커밋: `b2b6a533b5afb5d654637c9bcbe488548c05e993`
+- Task 9 시작/base 커밋: `b2b6a533b5afb5d654637c9bcbe488548c05e993`
+- 자동 검사 대상 코드 커밋: `c4441c5c0c114c0aa44171bea8bc2f2edb81508c`
+- 최초 QA 문서 커밋: `d634816a772e6bd8e3d11316589077c21deb8fc8`
 - 모바일 런타임: Node.js `v24.19.0`, npm `11.17.0`
 - 백엔드 대상 런타임: JDK `21.0.6`, Gradle Wrapper `8.14.4`
 
@@ -69,7 +71,7 @@ Task 8의 기존 통과 증거와 별개로 Task 9에서 fresh backend verificat
 
 ## 정적 검사와 clean prebuild 결과
 
-- 앱 소스는 `requestForegroundPermissionsAsync()`와 `getCurrentPositionAsync()`만 사용하며 Android 생성 manifest에는 `ACCESS_BACKGROUND_LOCATION`이 없다.
+- 앱 위치 gateway 소스는 `requestForegroundPermissionsAsync()`와 `getCurrentPositionAsync()`만 사용하며 background location API를 호출하지 않는다.
 - `expo-location` 플러그인에 Always 설명 두 개와 iOS/Android background location을 모두 명시적으로 `false`로 설정했다.
 - `CI=1 npx expo prebuild --platform ios --clean --no-install`은 종료 코드 0이었고, 새 `ios/FootLog/Info.plist`에는 `NSLocationWhenInUseUsageDescription`만 존재한다. 두 Always 키와 `UIBackgroundModes location`은 없다.
 - config introspection 테스트가 같은 native permission 결과를 검증한다.
