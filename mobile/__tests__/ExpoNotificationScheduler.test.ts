@@ -104,6 +104,43 @@ describe('ExpoNotificationScheduler', () => {
     });
   });
 
+  it('refreshes an enabled two-day schedule without asking for permission again', async () => {
+    const repository = createRepository({
+      enabled: true,
+      startHour: 9,
+      endHour: 10,
+      scheduledIds: ['expiring-footlog-id'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-08T08:32:00+09:00'));
+
+    await scheduler.refreshIfEnabled();
+
+    expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith('expiring-footlog-id');
+    expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(4);
+    expect(repository.setNotificationSettings).toHaveBeenLastCalledWith({
+      enabled: true,
+      startHour: 9,
+      endHour: 10,
+      scheduledIds: ['new-1', 'new-2', 'new-3', 'new-4'],
+    });
+  });
+
+  it('does not refresh when reminders are disabled', async () => {
+    const repository = createRepository({
+      enabled: false,
+      startHour: 7,
+      endHour: 23,
+      scheduledIds: [],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository);
+
+    await scheduler.refreshIfEnabled();
+
+    expect(mockGetPermissionsAsync).not.toHaveBeenCalled();
+    expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
+  });
+
   it('recovers from permission revoked after enabling without requesting again', async () => {
     mockGetPermissionsAsync.mockResolvedValue({
       status: 'denied', granted: false, canAskAgain: true, expires: 'never',
@@ -224,6 +261,31 @@ describe('ExpoNotificationScheduler', () => {
     await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
 
     expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith('partial-new-1');
+  });
+
+  it('persists a newly-created identifier when rollback cancellation fails', async () => {
+    const schedulingError = new Error('schedule failed');
+    mockScheduleNotificationAsync
+      .mockReset()
+      .mockResolvedValueOnce('orphaned-new-id')
+      .mockRejectedValueOnce(schedulingError);
+    mockCancelScheduledNotificationAsync.mockRejectedValueOnce(new Error('cancel failed'));
+    const repository = createRepository({
+      enabled: false,
+      startHour: 7,
+      endHour: 23,
+      scheduledIds: [],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
+
+    expect(repository.setNotificationSettings).toHaveBeenLastCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 10,
+      scheduledIds: ['orphaned-new-id'],
+    });
   });
 
   it('recovers persisted settings to disabled after rebuilding fails', async () => {

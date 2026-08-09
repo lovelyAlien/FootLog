@@ -13,15 +13,30 @@ export type NotificationScheduleResult =
 export interface NotificationScheduler {
   reschedule(window: ActivityWindow): Promise<NotificationScheduleResult>;
   disable(window: ActivityWindow): Promise<void>;
+  refreshIfEnabled(): Promise<void>;
 }
 
 export class ExpoNotificationScheduler implements NotificationScheduler {
+  private mutationQueue: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly settingsRepository: NotificationSettingsRepository,
     private readonly now: () => Date = () => new Date(),
   ) {}
 
   async reschedule(window: ActivityWindow): Promise<NotificationScheduleResult> {
+    return this.enqueue(() => this.performReschedule(window));
+  }
+
+  async refreshIfEnabled(): Promise<void> {
+    return this.enqueue(async () => {
+      const current = await this.settingsRepository.getNotificationSettings();
+      if (!current.enabled) return;
+      await this.performReschedule({ startHour: current.startHour, endHour: current.endHour });
+    });
+  }
+
+  private async performReschedule(window: ActivityWindow): Promise<NotificationScheduleResult> {
     const current = await this.settingsRepository.getNotificationSettings();
 
     const permission = current.enabled
@@ -73,19 +88,21 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
 
       return { status: 'scheduled', scheduledIds };
     } catch (error) {
-      await this.cancelIdentifiersBestEffort(scheduledIds);
-      await this.recoverDisabledSettings(window);
+      const orphanedIds = await this.cancelIdentifiersBestEffort(scheduledIds);
+      await this.recoverDisabledSettings(window, orphanedIds);
       throw error;
     }
   }
 
   async disable(window: ActivityWindow): Promise<void> {
-    const current = await this.settingsRepository.getNotificationSettings();
-    await this.cancelIdentifiers(current.scheduledIds);
-    await this.settingsRepository.setNotificationSettings({
-      enabled: false,
-      ...window,
-      scheduledIds: [],
+    return this.enqueue(async () => {
+      const current = await this.settingsRepository.getNotificationSettings();
+      await this.cancelIdentifiers(current.scheduledIds);
+      await this.settingsRepository.setNotificationSettings({
+        enabled: false,
+        ...window,
+        scheduledIds: [],
+      });
     });
   }
 
@@ -95,21 +112,28 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
     }
   }
 
-  private async cancelIdentifiersBestEffort(identifiers: string[]): Promise<void> {
-    await Promise.allSettled(
+  private async cancelIdentifiersBestEffort(identifiers: string[]): Promise<string[]> {
+    const results = await Promise.allSettled(
       identifiers.map((identifier) => Notifications.cancelScheduledNotificationAsync(identifier)),
     );
+    return identifiers.filter((_, index) => results[index].status === 'rejected');
   }
 
-  private async recoverDisabledSettings(window: ActivityWindow): Promise<void> {
+  private async recoverDisabledSettings(window: ActivityWindow, orphanedIds: string[]): Promise<void> {
     try {
       await this.settingsRepository.setNotificationSettings({
         enabled: false,
         ...window,
-        scheduledIds: [],
+        scheduledIds: orphanedIds,
       });
     } catch {
       // Keep the original scheduling/persistence failure for the caller.
     }
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.mutationQueue.then(operation, operation);
+    this.mutationQueue = result.then(() => undefined, () => undefined);
+    return result;
   }
 }

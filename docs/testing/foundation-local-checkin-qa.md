@@ -2,15 +2,15 @@
 
 ## 검증 상태
 
-- 상태: **미완료 / 차단됨**
-- 검증 일시: 2026-08-07 (Asia/Seoul)
+- 상태: **조건부 완료 — iOS Simulator 검증 완료, 실제 iPhone·Android 검증 보류**
+- 검증 일시: 2026-08-09 (Asia/Seoul)
 - Task 9 시작/base 커밋: `b2b6a533b5afb5d654637c9bcbe488548c05e993`
 - 자동 검사 대상 코드 커밋: `c4441c5c0c114c0aa44171bea8bc2f2edb81508c`
 - 최초 QA 문서 커밋: `d634816a772e6bd8e3d11316589077c21deb8fc8`
 - 모바일 런타임: Node.js `v24.19.0`, npm `11.17.0`
 - 백엔드 대상 런타임: JDK `21.0.6`, Gradle Wrapper `8.14.4`
 
-최소 한 대의 실제 기기 개발 빌드, 오프라인 재시작 보존, 실제 알림 탭 라우팅과 권한 프롬프트를 아직 입증하지 못했으므로 이 슬라이스는 완료로 판정하지 않는다.
+현재 환경에서 수행 가능한 iOS Simulator 기능 흐름과 재시작 보존, 알림 탭 라우팅을 확인해 이 슬라이스를 조건부 완료로 마감한다. 최소 한 대의 실제 iPhone 검증과 Android 검증은 환경이 준비될 때 수행할 후속 검증으로 보류하며, 아래 체크리스트는 의도적으로 미완료 상태를 유지한다.
 
 ## 재현 명령과 실제 결과
 
@@ -20,7 +20,7 @@
 
 | 명령 | 종료 코드 | 실제 결과 |
 | --- | ---: | --- |
-| `npm test` | 0 | 14/14 test suites, 63/63 tests 통과 |
+| `npm test -- --runInBand` | 0 | 15/15 test suites, 69/69 tests 통과 |
 | `npm run typecheck` | 0 | TypeScript 오류 없음 |
 | `npm run lint` | 0 | lint 오류 없음 |
 | `npx expo-doctor` | 0 | 온라인 실행에서 20/20 검사 통과 |
@@ -69,6 +69,20 @@ Task 8의 기존 통과 증거와 별개로 Task 9에서 fresh backend verificat
 
 iOS Simulator 개발 빌드·설치·실행은 검증했다. Android와 실제 iPhone은 검증하지 않았으며, completion gate의 실제 기기 증거로 Simulator 결과를 대신 사용하지 않는다.
 
+### iOS Simulator 기능 검증
+
+iPhone 17 Pro Simulator(iOS 26.5)의 Release 빌드에서 다음을 확인했다.
+
+- 앱 사용 중 위치 권한만 허용하고 시뮬레이션 좌표(37.5665, 126.9780)를 조회했다.
+- 위치 준비 후 지도 핀, 약 5m 정확도, 다시 찾기, 명시적 체크인 버튼이 표시됐다.
+- 체크인은 UUID와 좌표, 정확도, `pending` 동기화 상태로 기기 SQLite에 먼저 저장됐다.
+- 앱 강제 종료 후 다시 실행해도 오늘 목록과 SQLite 행이 유지됐다.
+- 알림 시간 범위를 저장했고 예약 식별자들이 로컬 설정과 함께 유지됐다.
+- 활성화된 다음 2일 예약은 앱 시작과 foreground 복귀 때 직렬화된 reconciliation으로 갱신된다. 예약 생성 후 rollback 취소에 실패한 ID는 다음 정리 시도를 위해 보존된다.
+- `simctl push`로 알림 응답을 주입하고 배너를 탭했을 때 `/check-in` 화면으로 이동했다. Expo iOS가 원격 알림 사용자 데이터를 `body` 딕셔너리에서 역직렬화하므로 Simulator 테스트 payload도 같은 구조를 사용했다.
+
+이 검증은 Simulator의 고정 좌표와 APNs 주입을 사용했다. 실제 GPS, 실제 예약 시각에 발생한 로컬 알림, 물리 기기의 권한 프롬프트를 입증하는 증거로 간주하지 않는다.
+
 ## 정적 검사와 clean prebuild 결과
 
 - 앱 위치 gateway 소스는 `requestForegroundPermissionsAsync()`와 `getCurrentPositionAsync()`만 사용하며 background location API를 호출하지 않는다.
@@ -76,7 +90,8 @@ iOS Simulator 개발 빌드·설치·실행은 검증했다. Android와 실제 i
 - `CI=1 npx expo prebuild --platform ios --clean --no-install`은 종료 코드 0이었고, 새 `ios/FootLog/Info.plist`에는 `NSLocationWhenInUseUsageDescription`만 존재한다. 두 Always 키와 `UIBackgroundModes location`은 없다.
 - config introspection 테스트가 같은 native permission 결과를 검증한다.
 - 완료 화면의 `오늘의 발자국 보기`는 주입된 callback을 호출하고, route가 이를 Expo Router의 `/`로 연결한다. component test는 완료 직후 자동 이동이 없고 버튼 press 후 callback이 정확히 한 번 호출됨을 검증한다.
-- 코드상 로컬 알림 payload와 응답 라우터는 `/check-in`을 사용하고 단위 테스트도 통과했지만, 실제 알림 탭 동작은 기기에서 확인하지 못했다.
+- 코드상 로컬 알림 payload와 응답 라우터는 `/check-in`을 사용한다. 알림 응답은 앱 초기화 전에 수신해도 보관했다가 DB와 root navigation이 준비된 뒤 이동하며, cold-start component test와 Simulator 알림 탭 검증을 통과했다.
+- Expo Router가 `src/app`을 `app`보다 우선 선택해 Release 번들에 starter 화면이 포함되는 문제를 발견했다. 중복 starter route와 미사용 starter 구성 요소를 제거하고 실제 router directory가 `app`인지 검사하는 회귀 테스트를 추가했다.
 
 ## 실제 기기 체크리스트
 

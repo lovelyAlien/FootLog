@@ -20,6 +20,7 @@ function createDependencies(options?: { enabled?: boolean; permissionDenied?: bo
       ? { status: 'denied' as const }
       : { status: 'scheduled' as const, scheduledIds: ['new-footlog-id'] }),
     disable: jest.fn(async () => undefined),
+    refreshIfEnabled: jest.fn(async () => undefined),
   };
 
   return { repository, scheduler };
@@ -91,6 +92,37 @@ describe('NotificationSettingsScreen', () => {
     expect(view.getByRole('button', { name: '알림 시간 저장' }).props.accessibilityState.disabled).toBe(true);
   });
 
+  it('preserves orphan notification identifiers when saving a disabled window', async () => {
+    const repository: NotificationSettingsRepository & { setNotificationSettings: jest.Mock } = {
+      getNotificationSettings: jest.fn(async () => ({
+        enabled: false,
+        startHour: 7,
+        endHour: 23,
+        scheduledIds: ['cleanup-still-needed'],
+      })),
+      setNotificationSettings: jest.fn(async () => undefined),
+    };
+    const scheduler: NotificationScheduler = {
+      reschedule: jest.fn(),
+      disable: jest.fn(),
+      refreshIfEnabled: jest.fn(),
+    };
+    const view = await render(
+      <NotificationSettingsScreen repository={repository} scheduler={scheduler} />,
+    );
+    await view.findByText('07:00–23:00');
+
+    await fireEvent.press(view.getByRole('button', { name: '시작 시간 08:00' }));
+    await fireEvent.press(view.getByRole('button', { name: '알림 시간 저장' }));
+
+    await waitFor(() => expect(repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 8,
+      endHour: 23,
+      scheduledIds: ['cleanup-still-needed'],
+    }));
+  });
+
   it('still disables enabled reminders with the saved window when the draft is invalid', async () => {
     const dependencies = createDependencies({ enabled: true });
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
@@ -126,6 +158,7 @@ describe('NotificationSettingsScreen', () => {
     const scheduler: NotificationScheduler = {
       reschedule: jest.fn(async () => { throw new Error('schedule failed'); }),
       disable: jest.fn(async () => undefined),
+      refreshIfEnabled: jest.fn(async () => undefined),
     };
     const view = await render(
       <NotificationSettingsScreen repository={repository} scheduler={scheduler} />,

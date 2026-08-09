@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
-import { Stack, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Stack, useRootNavigationState, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { FootLogRepositoryProvider } from '../src/database/FootLogContext';
 import { openFootLogDatabase } from '../src/database/openDatabase';
@@ -31,17 +31,32 @@ type InitializationState =
 
 export default function RootLayout() {
   const router = useRouter();
+  const rootNavigationState = useRootNavigationState();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<InitializationState>({ status: 'loading' });
+  const [pendingNotificationRoute, setPendingNotificationRoute] = useState<{
+    url: '/check-in';
+  } | null>(null);
+  const handledNotificationRoute = useRef<typeof pendingNotificationRoute>(null);
 
   useEffect(() => {
-    if (state.status !== 'ready') return;
-
     return startNotificationResponseRouting(
       Notifications,
-      (url) => router.push(url),
+      (url) => setPendingNotificationRoute({ url }),
     );
-  }, [router, state.status]);
+  }, []);
+
+  useEffect(() => {
+    if (
+      state.status !== 'ready'
+      || !rootNavigationState?.key
+      || !pendingNotificationRoute
+      || pendingNotificationRoute === handledNotificationRoute.current
+    ) return;
+
+    handledNotificationRoute.current = pendingNotificationRoute;
+    router.push(pendingNotificationRoute.url);
+  }, [pendingNotificationRoute, rootNavigationState?.key, router, state.status]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -66,6 +81,21 @@ export default function RootLayout() {
 
     return () => { isCurrent = false; };
   }, [attempt]);
+
+  useEffect(() => {
+    if (state.status !== 'ready') return;
+
+    const refresh = () => {
+      void state.notificationSettings.scheduler.refreshIfEnabled().catch(() => {
+        // A later foreground transition can retry without blocking app use.
+      });
+    };
+    refresh();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') refresh();
+    });
+    return () => subscription.remove();
+  }, [state]);
 
   if (state.status === 'loading') {
     return <LoadingState />;

@@ -1,5 +1,12 @@
 import { getConfig } from '@expo/config';
 import { compileModsAsync } from '@expo/config-plugins';
+import { getRouterDirectory } from '@expo/metro-config/build/rewriteRequestUrl';
+
+describe('Expo Router entry', () => {
+  it('bundles the FootLog routes from the app directory', () => {
+    expect(getRouterDirectory(process.cwd())).toBe('app');
+  });
+});
 
 describe('Expo native permission config', () => {
   it('generates iOS config without Always location descriptions or background location mode', async () => {

@@ -4,6 +4,8 @@
 
 기반 설계는 [docs/superpowers/specs/2026-08-02-location-checkin-diary-design.md](docs/superpowers/specs/2026-08-02-location-checkin-diary-design.md), 승인된 핵심 UX와 최신 MVP 범위는 [docs/superpowers/specs/2026-08-06-core-ux-flow-design.md](docs/superpowers/specs/2026-08-06-core-ux-flow-design.md)를 참조. 두 문서가 충돌하면 UX와 MVP 범위에는 후자를 우선 적용한다.
 
+`docs/solutions/`는 과거 문제와 해결책을 category 및 YAML frontmatter(`module`, `tags`, `problem_type`)로 정리한 검색 가능한 지식 저장소다. 관련 영역을 구현하거나 디버깅할 때 참고할 수 있다. `CONCEPTS.md`는 프로젝트의 공유 도메인 어휘를 정의한다.
+
 ## 스택
 
 - 모바일: React Native (iOS + Android)

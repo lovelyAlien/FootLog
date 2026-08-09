@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -30,6 +30,7 @@ export function NotificationSettingsScreen({
   const [endHour, setEndHour] = useState(23);
   const [savedWindow, setSavedWindow] = useState({ startHour: 7, endHour: 23 });
   const [message, setMessage] = useState<string | null>(null);
+  const busyRef = useRef(false);
 
   const applySettings = useCallback((settings: NotificationSettings) => {
     const authoritativeWindow = {
@@ -73,7 +74,8 @@ export function NotificationSettingsScreen({
   const window = { startHour, endHour };
 
   const setReminderEnabled = async (nextEnabled: boolean) => {
-    if (isBusy || (nextEnabled && !isValidWindow)) return;
+    if (busyRef.current || (nextEnabled && !isValidWindow)) return;
+    busyRef.current = true;
     setIsBusy(true);
     setMessage(null);
 
@@ -95,12 +97,14 @@ export function NotificationSettingsScreen({
     } catch {
       await syncAfterFailure('알림 설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
+      busyRef.current = false;
       setIsBusy(false);
     }
   };
 
   const saveWindow = async () => {
-    if (isBusy || !isValidWindow) return;
+    if (busyRef.current || !isValidWindow) return;
+    busyRef.current = true;
     setIsBusy(true);
     setMessage(null);
 
@@ -115,12 +119,18 @@ export function NotificationSettingsScreen({
           setSavedWindow(window);
         }
       } else {
-        await repository.setNotificationSettings({ enabled: false, ...window, scheduledIds: [] });
+        const current = await repository.getNotificationSettings();
+        await repository.setNotificationSettings({
+          enabled: false,
+          ...window,
+          scheduledIds: current.scheduledIds,
+        });
         setSavedWindow(window);
       }
     } catch {
       await syncAfterFailure('알림 시간을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
+      busyRef.current = false;
       setIsBusy(false);
     }
   };
