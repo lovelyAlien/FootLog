@@ -2,7 +2,7 @@
 
 - 프로젝트명: FootLog (앱스토어/플레이스토어 이름 중복 확인 완료, 2026-08-02)
 - 작성일: 2026-08-02
-- 상태: 기반 설계로 승인됨. 2026-08-06 이후 UX와 MVP 범위에는 `2026-08-06-core-ux-flow-design.md`를 우선 적용
+- 상태: 기반 설계로 승인됨. 2026-08-13 이후 제품 범위와 수용 기준에는 `docs/product/footlog-prd.md`를 우선 적용
 
 ## 배경 및 목적
 
@@ -21,7 +21,7 @@
 | 데이터 저장 | 로컬(SQLite) 우선 저장 + 서버 백업/동기화 |
 | 백엔드 | Spring Boot |
 | 데이터베이스 | PostgreSQL + PostGIS |
-| 인증 | Apple / Google 소셜 로그인만 (이메일/비밀번호 없음) |
+| 인증 | 공개 MVP는 카카오 소셜 로그인만 제공. Apple / Google은 후속 버전 |
 | 장소 표시 | 좌표/지도 핀만 (역지오코딩 없음, v2로 이연) |
 | MVP 범위 | 체크인 기록, 캘린더로 과거 로그 다시보기, 하루 단위 자동 요약(지도 핀 모음) |
 | v2 후보 | 자주 가는 곳 vs 새로운 곳 분석/시각화, 역지오코딩 기반 장소명 표시 |
@@ -35,7 +35,7 @@ SetLog는 그룹 멤버 전원이 정확히 동시에 알림을 받아야 하는
 ```
 [React Native App]                         [Spring Boot Backend]
  ├─ NotificationScheduler                    ├─ AuthController
- │   (기기 로컬 알림 예약, iOS/Android)         │   (Apple/Google 토큰 검증 → JWT)
+ │   (기기 로컬 알림 예약, iOS/Android)         │   (카카오 인증 검증 → 자체 인증 세션)
  ├─ CheckInScreen                            ├─ EntryController
  │   (알림 탭 → GPS 위치 체크인)                │   (위치 기록 upsert/조회, idempotent)
  ├─ LocalStore (SQLite)                      ├─ UserSettingsController
@@ -61,20 +61,20 @@ SetLog는 그룹 멤버 전원이 정확히 동시에 알림을 받아야 하는
 | `SyncService` | 앱 포그라운드 진입/네트워크 복구 시, 미동기화 항목을 서버로 push (백그라운드 태스크) |
 | `CalendarView` | 날짜별 과거 로그 탐색 (로컬 우선 조회) |
 | `DailySummaryView` | 하루치 체크인들을 지도 핀으로 모아 보여주는 자동 요약 화면 |
-| `OnboardingFlow` | 소셜 로그인 → 위치/알림 권한 요청 → 활동 시간대 설정 |
+| `OnboardingFlow` | M1~M2는 위치/알림 권한과 활동 시간 설정, M3부터 카카오 로그인 추가 |
 
 ### 백엔드 (Spring Boot)
 
 | 컴포넌트 | 역할 |
 |---|---|
-| `AuthController` | Apple/Google idToken 검증 → 자체 JWT 발급 |
+| `AuthController` | 카카오 인증 정보 검증 → FootLog 계정 인증 |
 | `EntryController` | 위치 기록 upsert(클라이언트 UUID 기반, idempotent) / 조회 API |
 | `UserSettingsController` | 활동 시간대 등 설정값 서버 동기화 (다기기 대비) |
 | `User`, `LocationEntry` (PostGIS) | DB 스키마 |
 
 ## 데이터 흐름
 
-1. **최초 설정**: 소셜 로그인 → 위치 권한("사용 중")·알림 권한 요청 → 활동 시간대 설정(예: 07:00~23:00)
+1. **최초 설정**: M1~M2는 로그인 없이 위치 권한("사용 중")·알림 권한 요청 → 활동 시간대 설정(예: 07:00~23:00). M3부터 카카오 로그인을 추가
 2. **알림 예약**: `NotificationScheduler`가 활동 시간대 내 매 정시 로컬 알림을 다음 날치까지 미리 예약
 3. **체크인**: 알림 탭 → `CheckInScreen`이 현재 위경도+타임스탬프를 즉시 GPS로 획득 → `LocalStore`에 저장 (status: `unsynced`)
 4. **동기화**: `SyncService`가 앱이 포그라운드로 오거나 네트워크가 살아날 때 미동기화 항목을 서버에 배치 전송 → 서버는 클라이언트 UUID 기준 upsert
@@ -89,7 +89,7 @@ SetLog는 그룹 멤버 전원이 정확히 동시에 알림을 받아야 하는
 | GPS 획득 실패/타임아웃 | 1회 재시도 → 그래도 실패하면 실패로 표시, 캘린더에 "실패" 아이콘 정도로만 부드럽게 노출 |
 | 알림 권한 거부 (온보딩 시) | 앱은 계속 사용 가능. 홈 화면에 "지금 체크인" 버튼으로 수동 기록 가능, 알림 켜기는 권장만 |
 | 동기화 실패 (네트워크/서버 오류) | 로컬 저장은 이미 끝난 상태라 데이터 유실 없음. `unsynced` 큐에 남아 지수 백오프로 재시도 |
-| 소셜 로그인 토큰 만료 | 재로그인 유도. 로컬 데이터는 로그인 여부와 무관하게 보존됨 |
+| 카카오 인증 만료 | 재로그인 유도. 로컬 데이터는 로그인 여부와 무관하게 보존됨 |
 | 기기 시간대/시계 변경 | 매일 재계산되는 스케줄러 덕분에 다음날부터 자동 반영 (당일 오차는 허용) |
 | 서버 재동기화 시 중복 저장 | 클라이언트 UUID를 PK로 upsert하므로 재전송해도 중복 안 생김 |
 
@@ -102,7 +102,7 @@ SetLog는 그룹 멤버 전원이 정확히 동시에 알림을 받아야 하는
 
 **백엔드 (Spring Boot)**
 - Testcontainers로 실제 PostgreSQL/PostGIS 띄워 통합 테스트
-- 인증: Apple/Google 토큰 검증 로직, 만료/위조 토큰 케이스
+- 인증: 카카오 인증 정보 검증 로직, 만료/위조 토큰 케이스
 - Entry API: upsert 멱등성, 사용자별 데이터 격리(다른 유저 데이터 조회 안 되는지) 검증
 
 **E2E**
