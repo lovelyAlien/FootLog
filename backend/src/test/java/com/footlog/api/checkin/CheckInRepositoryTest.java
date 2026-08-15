@@ -11,11 +11,13 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.springframework.http.HttpStatus;
 
 import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
@@ -96,5 +98,34 @@ class CheckInRepositoryTest {
         "SELECT count(*) FROM sync_change_log WHERE entity_id = ? AND operation = 'delete'",
         Integer.class, id);
     assertThat(logCount).isEqualTo(1);
+  }
+
+  @Test
+  void upsertRejectsDifferentUserForSameId() {
+    UUID userA = UUID.randomUUID();
+    UUID userB = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    checkInRepository.upsert(newCandidate(userA, id, 37.5));
+
+    assertThatThrownBy(() -> checkInRepository.upsert(newCandidate(userB, id, 37.5)))
+        .isInstanceOf(ApiException.class)
+        .satisfies(thrown -> {
+          ApiException apiException = (ApiException) thrown;
+          assertThat(apiException.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+          assertThat(apiException.getCode()).isEqualTo("CHECK_IN_NOT_FOUND");
+        });
+  }
+
+  @Test
+  void softDeleteDoesNothingForWrongUser() {
+    UUID userA = UUID.randomUUID();
+    UUID userB = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    checkInRepository.upsert(newCandidate(userA, id, 37.5));
+    Instant deletedAt = Instant.parse("2026-08-16T10:00:00Z");
+
+    assertThatCode(() -> checkInRepository.softDelete(userB, id, deletedAt)).doesNotThrowAnyException();
+
+    assertThat(checkInRepository.findById(id).orElseThrow().deletedAt()).isNull();
   }
 }
