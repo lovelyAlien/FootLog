@@ -2,3 +2,4 @@
 .worktrees/
 backend/.gradle/
 backend/build/
+backend/bin/
