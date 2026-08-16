@@ -1,5 +1,6 @@
 package com.footlog.api.common;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -19,5 +20,17 @@ public class GlobalExceptionHandler {
   public ResponseEntity<ApiError> handleBadRequest(Exception ex) {
     return ResponseEntity.status(HttpStatus.BAD_REQUEST)
         .body(new ApiError("VALIDATION_ERROR", "요청 형식이 올바르지 않습니다"));
+  }
+
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<ApiError> handleDataIntegrityViolation(DataIntegrityViolationException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ApiError("VALIDATION_ERROR", "요청 데이터가 제약 조건을 위반했습니다"));
+  }
+
+  @ExceptionHandler(NullPointerException.class)
+  public ResponseEntity<ApiError> handleNullPointer(NullPointerException ex) {
+    return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(new ApiError("VALIDATION_ERROR", "필수 요청 필드가 누락되었습니다"));
   }
 }
