@@ -17,3 +17,7 @@ Shared domain vocabulary for this project — entities, named processes, and sta
 ## Scheduled Notification Ownership
 
 FootLog가 생성한 로컬 알림만 해당 식별자로 추적하고 취소하는 소유권 규칙이다. 취소에 실패한 식별자는 다음 정리 시도를 위해 보존한다.
+
+## Ownership Masking
+
+다른 사용자 소유 리소스에 대한 서버 API 접근을, 그 리소스가 존재하는지 여부를 노출하지 않기 위해 403이 아닌 404로 응답하는 규칙이다. 클라이언트 생성 UUID가 다른 사용자의 기존 리소스와 충돌하는 경우에도 동일하게 적용되며, `{ENTITY}_NOT_FOUND` 형태의 에러 코드로 표현된다.
