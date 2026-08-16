@@ -1,7 +1,7 @@
 # FootLog 동기화 도메인 스키마·API 설계
 
 - 작성일: 2026-08-16
-- 상태: 초안 (섹션별 논의 완료, 전체 리뷰 대기)
+- 상태: 구현 완료 (백엔드 13개 태스크 구현 및 최종 브랜치 리뷰 완료, 4절 변경 이력 참고)
 - 관계: `docs/superpowers/specs/2026-08-14-server-sync-photo-backup-design.md`의 "5. 동기화 아키텍처"가 정한 아키텍처(엔터티별 쓰기 API + 커서 기반 변경 로그, presigned URL 사진 업로드, last-write-wins)를 그대로 따르되, 컬럼 타입·제약조건·인덱스·요청/응답 스키마 수준까지 구체화한다. 아키텍처 자체는 재논의하지 않는다.
 - 우선순위: 제품 요구사항과 수용 기준은 `docs/product/footlog-prd.md`를 우선한다. 이 문서는 그 수용 기준(FR-M3-02, M3 기술 선행조건)을 만족하는 DB·API 설계만 다룬다.
 - 범위 제외: 인증(카카오 로그인, 세션 발급·전환)은 이 문서에서 다루지 않는다. `users` 테이블과 세션 관련 API는 별도 인증 설계 문서 소관이며, 이 문서는 `user_id` 컬럼을 그 테이블에 대한 FK로만 참조한다. 클라이언트 SQLite 스키마 변경(동기화 아웃박스, `sync_status` 확장)도 범위 밖 — 구현 계획(writing-plans) 단계에서 이 문서를 근거로 결정한다.
@@ -18,6 +18,9 @@
 | 인증 | 모든 엔드포인트는 인증 세션이 필요(세션 검증 자체는 별도 인증 설계 문서 소관). 요청 바디에 `userId`를 받지 않고 세션에서 파생한다 |
 | 데이터 격리 | 다른 사용자 소유 리소스에 대한 접근은 존재 여부를 노출하지 않기 위해 403이 아닌 `404`로 응답한다(NFR-06) |
 | PostGIS 사용 범위 | `latitude`/`longitude`는 `double precision`으로만 저장한다. M4 공간 군집에 필요한 `geography` 컬럼 추가는 주간 발견 알고리즘 명세(PRD 16절 미결정 항목)가 확정된 뒤 별도 마이그레이션으로 도입한다 — 알고리즘이 정해지지 않은 채 컬럼 형태를 먼저 고정하지 않는다 |
+| 소유권 마스킹 코드 | 클라이언트 UUID가 다른 사용자 소유 엔터티와 충돌하는 경우(예: 재사용된 첨부 UUID) 모두 `404 {ENTITY}_NOT_FOUND` 계열 코드로 응답한다(`CHECK_IN_NOT_FOUND`, `CHECK_IN_NOTE_NOT_FOUND`, `REFLECTION_NOT_FOUND`, `PHOTO_NOT_FOUND`) — 어떤 사용자가 그 id를 이미 사용했는지 노출하지 않는다(NFR-06) |
+| 삭제된 리소스 재작성 코드 | 메모·회고처럼 편집 가능한 엔터티는 이미 소프트 삭제된 id로 PUT이 재수신되면 `409 {ENTITY}_DELETED`로 거부한다(`CHECK_IN_NOTE_DELETED`, `REFLECTION_DELETED`) — 삭제를 종단 상태로 취급하며, 같은 부모 아래 새 id로 재생성하는 것은 허용한다 |
+| 미분류 요청 오류 | 위 목록에 없는 요청 형식 오류(필수 필드 누락, DB 제약 위반 등)는 `400 VALIDATION_ERROR`로 응답한다 — 원시 500이 노출되지 않도록 하는 안전망이며 개별 도메인 규칙을 대체하지 않는다 |
 
 ## 2. DB 테이블 설계
 
@@ -44,10 +47,12 @@
 | 컬럼 | 타입 | 제약 | 설명 |
 |---|---|---|---|
 | id | uuid | PK | |
-| check_in_id | uuid | NOT NULL, UNIQUE, FK → check_ins.id | 1:1 — "메모 최대 1개"(FR-M2-01) 강제 |
+| check_in_id | uuid | NOT NULL, FK → check_ins.id | 1:1 원칙이지만 컬럼 자체는 하드 UNIQUE가 아님(아래 설명) |
 | body | text | NOT NULL | 길이 제한은 DB CHECK 대신 API 계층에서 검증(정책 변경 시 마이그레이션 불필요) |
 | updated_at | timestamptz | NOT NULL | |
 | deleted_at | timestamptz | NULL | |
+
+제약: `check_in_id`에 하드 UNIQUE를 두지 않는다. 대신 부분 유니크 인덱스 `UNIQUE (check_in_id) WHERE deleted_at IS NULL`로 "체크인당 활성 메모는 1개"(FR-M2-01)만 강제한다. 하드 UNIQUE로 두면 메모를 삭제한 뒤 같은 체크인에 새 메모(새 id)를 추가하려 할 때 소프트 삭제된 기존 행과 유니크 제약이 충돌해 실패한다 — `daily_reflections`·`photo_attachments`와 동일한 이유로 부분 인덱스를 쓴다.
 
 ### daily_reflections
 
@@ -109,7 +114,7 @@ PUT /v1/check-ins/{id}
 요청: `{ latitude, longitude, accuracyM, capturedAt, checkedInAt, createdAt }`
 응답: `200` + 저장된 리소스 표현. 신규/재시도 구분 없이 항상 `200`(멱등 upsert이므로 클라이언트가 상태 코드로 분기할 필요 없음).
 
-체크인은 생성 후 좌표·시각 편집이 불가(FR-M1-02)하므로, 동일 `id`에 **다른 값**이 재전송되면 `409 CHECK_IN_IMMUTABLE`. 완전히 동일한 payload 재전송(순수 재시도)은 `200`으로 무시한다.
+체크인은 생성 후 좌표·시각 편집이 불가(FR-M1-02)하므로, 동일 `id`에 **다른 값**이 재전송되면 `409 CHECK_IN_IMMUTABLE`. 완전히 동일한 payload 재전송(순수 재시도)은 `200`으로 무시한다. 동일 `id`가 다른 사용자 소유로 이미 존재하면 `404 CHECK_IN_NOT_FOUND`(소유권 마스킹, 1절).
 
 ```
 DELETE /v1/check-ins/{id}
@@ -124,6 +129,8 @@ PUT /v1/check-in-notes/{id}
 요청: `{ checkInId, body, updatedAt }` → `200`.
 - 부모 체크인이 없음: `404 CHECK_IN_NOT_FOUND`
 - 부모 체크인이 삭제됨: `409 CHECK_IN_DELETED`
+- 동일 `id`가 다른 사용자 소유 메모로 이미 존재함: `404 CHECK_IN_NOTE_NOT_FOUND`
+- 동일 `id`가 이미 삭제된 메모임: `409 CHECK_IN_NOTE_DELETED` — 삭제는 종단 상태이며, 새 메모가 필요하면 새 `id`로 요청한다
 - 들어온 `updatedAt`이 저장된 값보다 오래됨: 조용히 무시하고 현재 저장값으로 `200` 반환(참조 문서 §5.3 last-write-wins)
 
 ```
@@ -136,6 +143,8 @@ PUT /v1/daily-reflections/{id}
 ```
 요청: `{ date, body, updatedAt }` → `200`.
 - 같은 `date`를 다른 `id`(활성 상태)가 이미 점유: `409 REFLECTION_DATE_CONFLICT`
+- 동일 `id`가 다른 사용자 소유 회고로 이미 존재함: `404 REFLECTION_NOT_FOUND`
+- 동일 `id`가 이미 삭제된 회고임: `409 REFLECTION_DELETED` — 삭제는 종단 상태이며, 새 회고가 필요하면 새 `id`로 요청한다
 
 ```
 DELETE /v1/daily-reflections/{id}
@@ -150,7 +159,8 @@ POST /v1/photo-attachments
 요청: `{ id, checkInId, contentType, sizeBytes, checksum }`
 응답 `201`: `{ id, checkInId, uploadUrl, uploadExpiresAt, status: "uploading" }`
 - 부모 체크인 없음: `404 CHECK_IN_NOT_FOUND` · 삭제됨: `409 CHECK_IN_DELETED`
-- 동일 `id` 재요청 시 상태가 `uploading`이면 새 presigned URL을 재발급(멱등). `ready`/`deleted`면 `409 PHOTO_ALREADY_FINALIZED`
+- 동일 `id`가 다른 사용자 소유 첨부로 이미 존재함: `404 PHOTO_NOT_FOUND`
+- 동일 `id`(본인 소유) 재요청 시 상태가 `uploading`이면 새 presigned URL을 재발급(멱등). `ready`/`deleted`면 `409 PHOTO_ALREADY_FINALIZED`
 - 기존 `ready` 사진이 있어도 이 요청은 정상 허용(교체 시작)
 
 ```
@@ -183,3 +193,4 @@ GET /v1/sync/changes?cursor={seq}&limit=200
 | 날짜 | 변경 |
 |---|---|
 | 2026-08-16 | 최초 작성. 동기화 도메인(체크인·메모·회고·사진 첨부) DB 테이블과 API 계약 정의. 인증·클라이언트 SQLite 스키마는 범위 제외 |
+| 2026-08-16 | 구현·최종 리뷰 과정에서 발견된 격차 반영. `check_in_notes.check_in_id`를 하드 UNIQUE에서 부분 유니크 인덱스(`WHERE deleted_at IS NULL`)로 변경 — 메모 삭제 후 같은 체크인에 새 메모를 추가하는 흐름이 유니크 위반으로 실패하던 문제를 해결. 소유권 마스킹(`{ENTITY}_NOT_FOUND`)과 삭제된 리소스 재작성 거부(`{ENTITY}_DELETED`) 규칙을 1절 공통 규약으로 승격하고, 실제 구현에서 쓰이는 `CHECK_IN_NOTE_NOT_FOUND`/`CHECK_IN_NOTE_DELETED`/`REFLECTION_DELETED`/`PHOTO_NOT_FOUND`를 각 엔드포인트에 명시. 미분류 요청 오류(`VALIDATION_ERROR`)를 공통 규약에 추가 |
