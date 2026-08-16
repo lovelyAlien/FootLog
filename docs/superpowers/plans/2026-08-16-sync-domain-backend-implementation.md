@@ -17,6 +17,8 @@
 - 모든 쓰기/조회 API는 세션 대신 `X-Debug-User-Id` 헤더(UUID 문자열)로 사용자를 식별한다 — `CurrentUserProvider` 인터페이스 뒤의 임시 스텁이며, 카카오 세션 구현이 나오면 이 구현체만 교체한다.
 - 통합 테스트는 로컬 Docker 데몬이 필요하다(Testcontainers). 각 태스크의 테스트 실행 전 Docker가 떠 있는지 확인한다.
 - Spring Boot의 Jackson 자동 설정이 `Instant`/`LocalDate`를 ISO-8601 문자열로 (역)직렬화하므로 별도 설정은 필요 없다.
+- **[실행 중 발견] Jackson 패키지**: 이 프로젝트의 Spring Boot 4.1.0은 Jackson 3.x를 사용하므로 `ObjectMapper`/`JsonNode`는 `com.fasterxml.jackson.databind.*`가 아니라 `tools.jackson.databind.*`에서 import한다(Task 3에서 확인·수정됨).
+- **[실행 중 발견] 컨트롤러 통합 테스트**: 이 프로젝트의 `spring-boot-test:4.1.0`에는 `TestRestTemplate`이 없다(클래스 자체가 존재하지 않음, Task 5에서 확인됨). 컨트롤러 통합 테스트는 `TestRestTemplate` 대신 MockMvc를 사용한다 — `@SpringBootTest(webEnvironment = RANDOM_PORT)` + `@Autowired WebApplicationContext` + `MockMvcBuilders.webAppContextSetup(webApplicationContext).build()`, 요청은 `MockMvcRequestBuilders`(`put`/`delete`/`post`/`get`), 응답 검증은 `MockMvcResultMatchers`(`status()`, `jsonPath()`)를 사용한다. JSON 요청 바디는 Java 텍스트 블록 문자열로 직접 작성한다(Map 대신). 이 패턴은 `backend/src/test/java/com/footlog/api/checkin/CheckInControllerTest.java`에 이미 구현되어 있으므로 이후 컨트롤러 테스트 태스크(7, 9, 11, 12, 13)는 이를 참고한다.
 
 ---
 
