@@ -6,6 +6,7 @@ import com.footlog.api.common.ApiException;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -17,6 +18,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest
@@ -94,5 +96,36 @@ class CheckInNoteRepositoryTest {
     checkInNoteRepository.delete(userId, noteId, Instant.parse("2026-08-16T09:10:00Z"));
 
     assertThat(checkInNoteRepository.findActiveByCheckInId(checkInId)).isEmpty();
+  }
+
+  @Test
+  void upsertRejectsNoteForCheckInOwnedByAnotherUser() {
+    UUID userA = UUID.randomUUID();
+    UUID userB = UUID.randomUUID();
+    UUID checkInId = createCheckIn(userA);
+
+    assertThatThrownBy(() ->
+        checkInNoteRepository.upsert(userB, UUID.randomUUID(), checkInId, "메모", Instant.parse("2026-08-16T09:05:00Z")))
+        .isInstanceOf(ApiException.class)
+        .satisfies(thrown -> {
+          ApiException apiException = (ApiException) thrown;
+          assertThat(apiException.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+          assertThat(apiException.getCode()).isEqualTo("CHECK_IN_NOT_FOUND");
+        });
+  }
+
+  @Test
+  void deleteDoesNothingForCheckInOwnedByAnotherUser() {
+    UUID userA = UUID.randomUUID();
+    UUID userB = UUID.randomUUID();
+    UUID checkInId = createCheckIn(userA);
+    UUID noteId = UUID.randomUUID();
+    checkInNoteRepository.upsert(userA, noteId, checkInId, "메모", Instant.parse("2026-08-16T09:05:00Z"));
+
+    assertThatCode(() ->
+        checkInNoteRepository.delete(userB, noteId, Instant.parse("2026-08-16T09:10:00Z")))
+        .doesNotThrowAnyException();
+
+    assertThat(checkInNoteRepository.findActiveByCheckInId(checkInId)).isPresent();
   }
 }
