@@ -131,4 +131,22 @@ class DailyReflectionRepositoryTest {
 
     assertThat(repository.findOwned(userA, id).orElseThrow().deletedAt()).isNull();
   }
+
+  @Test
+  void upsertRejectsWriteToDeletedReflection() {
+    UUID userId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    LocalDate date = LocalDate.of(2026, 8, 16);
+    repository.upsert(userId, id, date, "첫 회고", Instant.parse("2026-08-16T21:00:00Z"));
+    repository.delete(userId, id, Instant.parse("2026-08-16T21:10:00Z"));
+
+    assertThatThrownBy(() ->
+        repository.upsert(userId, id, date, "수정 시도", Instant.parse("2026-08-16T21:15:00Z")))
+        .isInstanceOf(ApiException.class)
+        .satisfies(thrown -> {
+          ApiException apiException = (ApiException) thrown;
+          assertThat(apiException.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+          assertThat(apiException.getCode()).isEqualTo("REFLECTION_DELETED");
+        });
+  }
 }

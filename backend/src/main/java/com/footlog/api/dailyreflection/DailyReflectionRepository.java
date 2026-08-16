@@ -53,6 +53,10 @@ public class DailyReflectionRepository {
       throw new ApiException(HttpStatus.NOT_FOUND, "REFLECTION_NOT_FOUND", "회고를 찾을 수 없습니다");
     }
 
+    if (existingById.isPresent() && existingById.get().deletedAt() != null) {
+      throw new ApiException(HttpStatus.CONFLICT, "REFLECTION_DELETED", "삭제된 회고는 수정할 수 없습니다");
+    }
+
     if (existingById.isPresent() && !updatedAt.isAfter(existingById.get().updatedAt())) {
       return existingById.get();
     }
