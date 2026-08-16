@@ -17,6 +17,7 @@ import org.testcontainers.utility.DockerImageName;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.equalTo;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -67,6 +68,24 @@ class CheckInControllerTest {
             .content(jsonBody()))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id", equalTo(checkInId.toString())));
+  }
+
+  @Test
+  void putThenDeleteCheckInCascadesToNoteAndPhoto() throws Exception {
+    UUID userId = UUID.randomUUID();
+    UUID checkInId = UUID.randomUUID();
+
+    mockMvc().perform(put("/v1/check-ins/" + checkInId)
+            .header("X-Debug-User-Id", userId.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(jsonBody()))
+        .andExpect(status().isOk());
+
+    mockMvc().perform(delete("/v1/check-ins/" + checkInId)
+            .header("X-Debug-User-Id", userId.toString())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"deletedAt\": \"2026-08-16T10:00:00Z\"}"))
+        .andExpect(status().isOk());
   }
 
   @Test

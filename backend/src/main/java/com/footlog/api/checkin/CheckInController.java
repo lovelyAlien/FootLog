@@ -1,6 +1,8 @@
 package com.footlog.api.checkin;
 
 import com.footlog.api.auth.CurrentUserProvider;
+import com.footlog.api.common.DeletedAtRequest;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,10 +14,13 @@ import java.util.UUID;
 public class CheckInController {
 
   private final CheckInRepository checkInRepository;
+  private final CheckInDeletionService checkInDeletionService;
   private final CurrentUserProvider currentUserProvider;
 
-  public CheckInController(CheckInRepository checkInRepository, CurrentUserProvider currentUserProvider) {
+  public CheckInController(CheckInRepository checkInRepository, CheckInDeletionService checkInDeletionService,
+                            CurrentUserProvider currentUserProvider) {
     this.checkInRepository = checkInRepository;
+    this.checkInDeletionService = checkInDeletionService;
     this.currentUserProvider = currentUserProvider;
   }
 
@@ -26,5 +31,11 @@ public class CheckInController {
         request.capturedAt(), request.checkedInAt(), request.createdAt(), null);
     CheckIn saved = checkInRepository.upsert(candidate);
     return CheckInResponse.from(saved);
+  }
+
+  @DeleteMapping("/v1/check-ins/{id}")
+  public void delete(@PathVariable UUID id, @RequestBody DeletedAtRequest request) {
+    UUID userId = currentUserProvider.currentUserId();
+    checkInDeletionService.deleteCascading(userId, id, request.deletedAt());
   }
 }
