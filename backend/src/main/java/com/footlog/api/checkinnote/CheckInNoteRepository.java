@@ -55,7 +55,16 @@ public class CheckInNoteRepository {
   public CheckInNote upsert(UUID userId, UUID id, UUID checkInId, String body, Instant updatedAt) {
     requireOwnedActiveCheckIn(userId, checkInId);
 
+    Optional<UUID> existingNoteOwner = findNoteOwnerUserId(id);
+    if (existingNoteOwner.isPresent() && !existingNoteOwner.get().equals(userId)) {
+      throw new ApiException(HttpStatus.NOT_FOUND, "CHECK_IN_NOTE_NOT_FOUND", "메모를 찾을 수 없습니다");
+    }
+
     Optional<CheckInNote> existing = findOwned(userId, id);
+    if (existing.isPresent() && existing.get().deletedAt() != null) {
+      throw new ApiException(HttpStatus.CONFLICT, "CHECK_IN_NOTE_DELETED", "삭제된 메모는 수정할 수 없습니다");
+    }
+
     if (existing.isEmpty()) {
       jdbcTemplate.update(
           "INSERT INTO check_in_notes (id, check_in_id, body, updated_at) VALUES (?, ?, ?, ?)",
@@ -84,6 +93,14 @@ public class CheckInNoteRepository {
     }
     jdbcTemplate.update("UPDATE check_in_notes SET deleted_at = ? WHERE id = ?", Timestamp.from(deletedAt), id);
     syncChangeLogRepository.append(userId, "check_in_note", id, "delete", null, deletedAt);
+  }
+
+  private Optional<UUID> findNoteOwnerUserId(UUID noteId) {
+    List<UUID> rows = jdbcTemplate.query(
+        "SELECT c.user_id AS owner_user_id FROM check_in_notes n JOIN check_ins c ON c.id = n.check_in_id " +
+            "WHERE n.id = ?",
+        (rs, rowNum) -> UUID.fromString(rs.getString("owner_user_id")), noteId);
+    return rows.stream().findFirst();
   }
 
   private CheckIn requireOwnedActiveCheckIn(UUID userId, UUID checkInId) {
