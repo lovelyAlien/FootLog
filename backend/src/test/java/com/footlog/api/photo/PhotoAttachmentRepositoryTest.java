@@ -128,4 +128,24 @@ class PhotoAttachmentRepositoryTest {
           assertThat(apiException.getCode()).isEqualTo("PHOTO_NOT_FOUND");
         });
   }
+
+  @Test
+  void completeRejectsAlreadyDeletedPhoto() {
+    UUID userId = UUID.randomUUID();
+    UUID checkInId = createCheckIn(userId);
+    UUID photoId = UUID.randomUUID();
+    photoAttachmentRepository.createUploading(userId, photoId, checkInId, "photos/x", "image/jpeg", 1024,
+        "checksum", Instant.parse("2026-08-16T09:10:00Z"));
+    photoAttachmentRepository.complete(userId, photoId, Instant.parse("2026-08-16T09:11:00Z"));
+    photoAttachmentRepository.delete(userId, photoId, Instant.parse("2026-08-16T09:12:00Z"));
+
+    assertThatThrownBy(() ->
+        photoAttachmentRepository.complete(userId, photoId, Instant.parse("2026-08-16T09:13:00Z")))
+        .isInstanceOf(ApiException.class)
+        .satisfies(thrown -> {
+          ApiException apiException = (ApiException) thrown;
+          assertThat(apiException.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+          assertThat(apiException.getCode()).isEqualTo("PHOTO_ALREADY_FINALIZED");
+        });
+  }
 }

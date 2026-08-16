@@ -18,8 +18,10 @@ import org.testcontainers.utility.DockerImageName;
 import java.time.Instant;
 import java.util.UUID;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -80,5 +82,21 @@ class SyncControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.changes", empty()))
         .andExpect(jsonPath("$.nextCursor", equalTo(0)));
+  }
+
+  @Test
+  void deletedCheckInRendersNullPayload() throws Exception {
+    UUID userId = UUID.randomUUID();
+    UUID checkInId = UUID.randomUUID();
+    Instant now = Instant.parse("2026-08-16T09:00:00Z");
+    checkInRepository.upsert(new CheckIn(checkInId, userId, 37.5, 127.0, 15.0, now, now, now, null));
+    checkInRepository.softDelete(userId, checkInId, Instant.parse("2026-08-16T10:00:00Z"));
+
+    mockMvc().perform(get("/v1/sync/changes")
+            .param("cursor", "0")
+            .param("limit", "200")
+            .header("X-Debug-User-Id", userId.toString()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.changes[?(@.operation=='delete')].payload").value(contains(nullValue())));
   }
 }

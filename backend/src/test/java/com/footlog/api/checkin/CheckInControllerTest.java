@@ -71,7 +71,7 @@ class CheckInControllerTest {
   }
 
   @Test
-  void putThenDeleteCheckInCascadesToNoteAndPhoto() throws Exception {
+  void putThenDeleteCheckIn() throws Exception {
     UUID userId = UUID.randomUUID();
     UUID checkInId = UUID.randomUUID();
 

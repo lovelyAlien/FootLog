@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 @SpringBootTest
 @Testcontainers
@@ -75,5 +76,20 @@ class CheckInDeletionServiceTest {
     Integer deleteLogCount = jdbcTemplate.queryForObject(
         "SELECT count(*) FROM sync_change_log WHERE user_id = ? AND operation = 'delete'", Integer.class, userId);
     assertThat(deleteLogCount).isEqualTo(1);
+  }
+
+  @Test
+  void doesNothingForCheckInOwnedByAnotherUser() {
+    UUID userA = UUID.randomUUID();
+    UUID userB = UUID.randomUUID();
+    UUID checkInId = UUID.randomUUID();
+    Instant now = Instant.parse("2026-08-16T09:00:00Z");
+    checkInRepository.upsert(new CheckIn(checkInId, userA, 37.5, 127.0, 15.0, now, now, now, null));
+
+    assertThatCode(() ->
+        checkInDeletionService.deleteCascading(userB, checkInId, Instant.parse("2026-08-16T10:00:00Z")))
+        .doesNotThrowAnyException();
+
+    assertThat(checkInRepository.findById(checkInId).orElseThrow().deletedAt()).isNull();
   }
 }
