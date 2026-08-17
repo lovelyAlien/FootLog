@@ -53,8 +53,10 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
 
   useEffect(() => {
     if (state.status !== 'loaded') return;
-    setBodyText(state.reflection?.body ?? state.draft ?? '');
-    setIsCompleted(state.reflection !== null);
+    void Promise.resolve().then(() => {
+      setBodyText(state.reflection?.body ?? state.draft ?? '');
+      setIsCompleted(state.reflection !== null);
+    });
   }, [state]);
 
   const onChangeBody = (text: string) => {
