@@ -1,3 +1,5 @@
+process.env.TZ = 'Asia/Seoul';
+
 jest.mock('react-native-maps', () => {
   const React = require('react');
   const { Pressable, View } = require('react-native');
@@ -68,6 +70,7 @@ describe('DailyDetailScreen', () => {
     });
     const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
     expect(view.getByText('이날은 남겨진 발자국이 없어요.')).toBeTruthy();
+    expect(view.queryByTestId('daily-detail-map')).toBeNull();
   });
 
   it('shows daily summary facts for a day with check-ins', async () => {
@@ -79,18 +82,18 @@ describe('DailyDetailScreen', () => {
     });
     const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
 
-    // Note: expected times are computed with the same local-timezone formatting the
-    // component uses, rather than hardcoded, because this suite's local TZ is not UTC
-    // (this machine runs Asia/Seoul) and the brief's hardcoded '09:00'/'12:00' assumed UTC.
-    const formatKoreanTime = (iso: string) =>
-      new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso));
-    const firstTime = formatKoreanTime(checkIn1.checkedInAt);
-    const lastTime = formatKoreanTime(checkIn2.checkedInAt);
-
-    expect(view.getByText(new RegExp(`첫 체크인 ${firstTime} · 마지막 체크인 ${lastTime}`))).toBeTruthy();
+    // TZ is pinned to Asia/Seoul (UTC+9) at the top of this file, so these UTC
+    // timestamps map to fixed, known-correct local wall-clock times:
+    // 2026-08-16T09:00:00.000Z -> 18:00, 2026-08-16T12:00:00.000Z -> 21:00.
+    expect(view.getByText(/첫 체크인 18:00 · 마지막 체크인 21:00/)).toBeTruthy();
+    expect(
+      view.getByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.'),
+    ).toBeTruthy();
   });
 
   it('syncs selection between a map pin and its timeline slot', async () => {
+    // With TZ pinned to Asia/Seoul, this UTC timestamp buckets to local hour 18,
+    // which falls inside the activityWindow [7, 23] below.
     const checkIn = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-16T09:00:00.000Z' });
     mockUseDailyDetail.mockReturnValue({
       state: { status: 'loaded', checkIns: [checkIn], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
