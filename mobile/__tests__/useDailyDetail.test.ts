@@ -58,6 +58,37 @@ describe('useDailyDetail', () => {
     });
   });
 
+  it('shows a loading state before transitioning to loaded', async () => {
+    let resolveCheckIns: (value: CheckIn[]) => void;
+    mockCheckInRepository.listByLocalDay.mockReturnValue(
+      new Promise<CheckIn[]>((resolve) => { resolveCheckIns = resolve; }),
+    );
+    mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
+    mockDraftRepository.getDraft.mockResolvedValue('초안');
+    mockNotificationSettingsRepository.getNotificationSettings.mockResolvedValue({
+      enabled: true, startHour: 7, endHour: 23, scheduledIds: [],
+    });
+
+    const { result } = await renderHook(() => useDailyDetail('2026-08-16'));
+
+    expect(result.current.state).toEqual({ status: 'loading' });
+
+    await act(async () => {
+      resolveCheckIns([checkIn]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(result.current.state.status).toBe('loaded'));
+
+    expect(result.current.state).toEqual({
+      status: 'loaded',
+      checkIns: [checkIn],
+      reflection: null,
+      draft: '초안',
+      activityWindow: { startHour: 7, endHour: 23 },
+    });
+  });
+
   it('reports an error state when any of the loads fail', async () => {
     mockCheckInRepository.listByLocalDay.mockRejectedValue(new Error('db unavailable'));
     mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
