@@ -75,6 +75,7 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
   };
 
   const complete = async () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setSaveError(null);
     try {
       await saveDailyReflection(localDate, bodyText, { repository: reflectionRepository, uuid, now });

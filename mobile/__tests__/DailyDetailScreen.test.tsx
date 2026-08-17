@@ -134,6 +134,37 @@ describe('DailyDetailScreen', () => {
     jest.useRealTimers();
   });
 
+  it('cancels a pending draft auto-save when 완료 is pressed before the debounce fires', async () => {
+    jest.useFakeTimers();
+    mockDraftRepository.saveDraft.mockClear();
+    mockDraftRepository.saveDraft.mockResolvedValue(undefined);
+    mockDraftRepository.clearDraft.mockResolvedValue(undefined);
+    mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
+    mockReflectionRepository.save.mockResolvedValue(undefined);
+    mockUseDailyDetail.mockReturnValue({
+      state: { status: 'loaded', checkIns: [], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
+      reload: jest.fn(),
+    });
+
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+    await fireEvent.changeText(view.getByTestId('daily-detail-reflection-input'), '완료 직전 입력');
+
+    await act(async () => { await fireEvent.press(view.getByRole('button', { name: '완료' })); });
+
+    await waitFor(() => expect(mockReflectionRepository.save).toHaveBeenCalledWith({
+      id: 'new-reflection-id',
+      localDate: '2026-08-16',
+      body: '완료 직전 입력',
+      updatedAt: '2026-08-16T20:00:00.000Z',
+    }));
+    expect(mockDraftRepository.clearDraft).toHaveBeenCalledWith('2026-08-16');
+
+    await act(() => { jest.advanceTimersByTime(500); });
+    expect(mockDraftRepository.saveDraft).not.toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
   it('completes a reflection, clears the draft, and hides the 완료 button afterward', async () => {
     mockReflectionRepository.save.mockResolvedValue(undefined);
     mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
