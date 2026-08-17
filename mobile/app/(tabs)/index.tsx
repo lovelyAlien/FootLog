@@ -4,21 +4,9 @@ import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFootLogRepository } from '../../src/database/FootLogContext';
+import { localDateAndTimezone } from '../../src/shared/localDate';
 import { TodayCheckIns } from '../../src/features/check-in/TodayCheckIns';
 import type { CheckIn } from '../../src/features/check-in/domain';
-
-function localDateAndTimezone(now = new Date()): { localDate: string; timezone: string } {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-
-  return { localDate: `${values.year}-${values.month}-${values.day}`, timezone };
-}
 
 export default function TodayRoute() {
   const router = useRouter();
