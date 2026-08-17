@@ -22,14 +22,36 @@ CREATE TABLE IF NOT EXISTS app_settings (
 PRAGMA user_version = 1;
 `;
 
+const VERSION_2_SCHEMA = `
+CREATE TABLE IF NOT EXISTS daily_reflections (
+  id TEXT PRIMARY KEY NOT NULL,
+  local_date TEXT NOT NULL UNIQUE,
+  body TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS daily_reflection_drafts (
+  local_date TEXT PRIMARY KEY NOT NULL,
+  body TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+PRAGMA user_version = 2;
+`;
+
 export async function migrateDatabase(db: SQLiteDatabase): Promise<void> {
   const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+  const currentVersion = version?.user_version ?? 0;
 
-  if ((version?.user_version ?? 0) < 1) {
+  if (currentVersion < 1) {
     await db.execAsync('PRAGMA journal_mode = WAL;');
 
     await db.withTransactionAsync(async () => {
       await db.execAsync(VERSION_1_SCHEMA);
+    });
+  }
+
+  if (currentVersion < 2) {
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(VERSION_2_SCHEMA);
     });
   }
 }

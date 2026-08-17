@@ -28,4 +28,5 @@ export interface CheckInRepository {
   save(checkIn: CheckIn): Promise<void>;
   listByLocalDay(localDate: string, timezone: string): Promise<CheckIn[]>;
   deleteById(id: string): Promise<void>;
+  listLocalDatesWithCheckIns(year: number, month: number, timezone: string): Promise<string[]>;
 }

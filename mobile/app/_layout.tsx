@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
@@ -7,6 +8,12 @@ import { FootLogRepositoryProvider } from '../src/database/FootLogContext';
 import { openFootLogDatabase } from '../src/database/openDatabase';
 import { SQLiteCheckInRepository } from '../src/features/check-in/SQLiteCheckInRepository';
 import type { CheckInRepository } from '../src/features/check-in/domain';
+import {
+  DailyReflectionProvider,
+  type DailyReflectionDependencies,
+} from '../src/features/daily-reflection/DailyReflectionContext';
+import { SQLiteDailyReflectionDraftRepository } from '../src/features/daily-reflection/SQLiteDailyReflectionDraftRepository';
+import { SQLiteDailyReflectionRepository } from '../src/features/daily-reflection/SQLiteDailyReflectionRepository';
 import { ExpoNotificationScheduler } from '../src/features/notifications/ExpoNotificationScheduler';
 import {
   NotificationSettingsProvider,
@@ -26,6 +33,7 @@ type InitializationState =
       status: 'ready';
       repository: CheckInRepository;
       notificationSettings: NotificationSettingsDependencies;
+      dailyReflection: DailyReflectionDependencies;
     }
   | { status: 'error' };
 
@@ -71,6 +79,12 @@ export default function RootLayout() {
             notificationSettings: {
               repository: settingsRepository,
               scheduler: new ExpoNotificationScheduler(settingsRepository),
+            },
+            dailyReflection: {
+              reflectionRepository: new SQLiteDailyReflectionRepository(database),
+              draftRepository: new SQLiteDailyReflectionDraftRepository(database),
+              uuid: Crypto.randomUUID,
+              now: () => new Date().toISOString(),
             },
           });
         }
@@ -124,11 +138,14 @@ export default function RootLayout() {
   return (
     <FootLogRepositoryProvider value={state.repository}>
       <NotificationSettingsProvider value={state.notificationSettings}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="check-in" options={{ title: '체크인' }} />
-          <Stack.Screen name="settings/reminders" options={{ title: '체크인 알림' }} />
-        </Stack>
+        <DailyReflectionProvider value={state.dailyReflection}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="check-in" options={{ title: '체크인' }} />
+            <Stack.Screen name="day/[date]" options={{ title: '일일 회고' }} />
+            <Stack.Screen name="settings/reminders" options={{ title: '체크인 알림' }} />
+          </Stack>
+        </DailyReflectionProvider>
       </NotificationSettingsProvider>
     </FootLogRepositoryProvider>
   );
