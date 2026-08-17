@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { CheckInScreen } from '../src/features/check-in/CheckInScreen';
 import { ExpoLocationGateway } from '../src/features/check-in/ExpoLocationGateway';
 import { useFootLogRepository } from '../src/database/FootLogContext';
+import { localDateAndTimezone } from '../src/shared/localDate';
 
 export default function CheckInRoute() {
   const repository = useFootLogRepository();
@@ -16,7 +17,7 @@ export default function CheckInRoute() {
         uuid: Crypto.randomUUID,
         now: () => new Date().toISOString(),
       }}
-      onViewToday={() => router.replace('/')}
+      onViewToday={() => router.replace({ pathname: '/day/[date]', params: { date: localDateAndTimezone().localDate } })}
     />
   );
 }
