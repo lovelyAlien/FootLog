@@ -20,16 +20,19 @@ const mockUseDailyDetail = jest.fn();
 jest.mock('../src/features/daily-reflection/useDailyDetail', () => ({
   useDailyDetail: () => mockUseDailyDetail(),
 }));
+const mockReflectionRepository = { getByLocalDate: jest.fn(), save: jest.fn() };
+const mockDraftRepository = { getDraft: jest.fn(), saveDraft: jest.fn(), clearDraft: jest.fn() };
+
 jest.mock('../src/features/daily-reflection/DailyReflectionContext', () => ({
   useDailyReflectionDependencies: () => ({
-    reflectionRepository: { getByLocalDate: jest.fn(), save: jest.fn(), deleteByLocalDate: jest.fn() },
-    draftRepository: { getDraft: jest.fn(), saveDraft: jest.fn(), clearDraft: jest.fn() },
-    uuid: () => 'uuid',
-    now: () => '2026-08-16T00:00:00.000Z',
+    reflectionRepository: mockReflectionRepository,
+    draftRepository: mockDraftRepository,
+    uuid: () => 'new-reflection-id',
+    now: () => '2026-08-16T20:00:00.000Z',
   }),
 }));
 
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { DailyDetailScreen } from '../src/features/daily-reflection/DailyDetailScreen';
 import type { CheckIn } from '../src/features/check-in/domain';
@@ -108,5 +111,84 @@ describe('DailyDetailScreen', () => {
       const flattenedStyle = [timelineSlot.props.style].flat();
       expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: '#2e6af0' })]));
     });
+  });
+
+  it('auto-saves the draft while typing before completion, debounced', async () => {
+    jest.useFakeTimers();
+    mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
+    mockDraftRepository.saveDraft.mockResolvedValue(undefined);
+    mockUseDailyDetail.mockReturnValue({
+      state: { status: 'loaded', checkIns: [], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
+      reload: jest.fn(),
+    });
+
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+    await fireEvent.changeText(view.getByTestId('daily-detail-reflection-input'), '오늘은');
+
+    await act(() => { jest.advanceTimersByTime(499); });
+    expect(mockDraftRepository.saveDraft).not.toHaveBeenCalled();
+
+    await act(() => { jest.advanceTimersByTime(1); });
+    await waitFor(() => expect(mockDraftRepository.saveDraft).toHaveBeenCalledWith('2026-08-16', '오늘은'));
+
+    jest.useRealTimers();
+  });
+
+  it('completes a reflection, clears the draft, and hides the 완료 button afterward', async () => {
+    mockReflectionRepository.save.mockResolvedValue(undefined);
+    mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
+    mockDraftRepository.clearDraft.mockResolvedValue(undefined);
+    mockUseDailyDetail.mockReturnValue({
+      state: { status: 'loaded', checkIns: [], reflection: null, draft: '오늘의 초안', activityWindow: { startHour: 7, endHour: 23 } },
+      reload: jest.fn(),
+    });
+
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+    expect(view.getByTestId('daily-detail-reflection-input').props.value).toBe('오늘의 초안');
+
+    await fireEvent.press(view.getByRole('button', { name: '완료' }));
+
+    await waitFor(() => expect(mockReflectionRepository.save).toHaveBeenCalledWith({
+      id: 'new-reflection-id',
+      localDate: '2026-08-16',
+      body: '오늘의 초안',
+      updatedAt: '2026-08-16T20:00:00.000Z',
+    }));
+    expect(mockDraftRepository.clearDraft).toHaveBeenCalledWith('2026-08-16');
+    await waitFor(() => expect(view.queryByRole('button', { name: '완료' })).toBeNull());
+  });
+
+  it('keeps the entered body and shows an error message when completion fails', async () => {
+    mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
+    mockReflectionRepository.save.mockRejectedValue(new Error('disk full'));
+    mockUseDailyDetail.mockReturnValue({
+      state: { status: 'loaded', checkIns: [], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
+      reload: jest.fn(),
+    });
+
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+    await fireEvent.changeText(view.getByTestId('daily-detail-reflection-input'), '실패할 회고');
+    await fireEvent.press(view.getByRole('button', { name: '완료' }));
+
+    await waitFor(() => expect(view.getByText('회고를 저장하지 못했어요. 다시 시도해 주세요.')).toBeTruthy());
+    expect(view.getByTestId('daily-detail-reflection-input').props.value).toBe('실패할 회고');
+  });
+
+  it('prefills from a completed reflection rather than the draft, and has no 완료 button', async () => {
+    mockUseDailyDetail.mockReturnValue({
+      state: {
+        status: 'loaded',
+        checkIns: [],
+        reflection: { id: 'existing-id', localDate: '2026-08-16', body: '완료된 회고', updatedAt: '2026-08-16T10:00:00.000Z' },
+        draft: '무시되어야 할 초안',
+        activityWindow: { startHour: 7, endHour: 23 },
+      },
+      reload: jest.fn(),
+    });
+
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+
+    expect(view.getByTestId('daily-detail-reflection-input').props.value).toBe('완료된 회고');
+    expect(view.queryByRole('button', { name: '완료' })).toBeNull();
   });
 });

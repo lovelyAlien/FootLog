@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
 import type { CheckIn } from '../check-in/domain';
 import { computeDailySummary } from './dailySummary';
 import { useDailyDetail } from './useDailyDetail';
+import { useDailyReflectionDependencies } from './DailyReflectionContext';
+import { saveDailyReflection } from './saveDailyReflection';
 
 type DailyDetailScreenProps = {
   localDate: string;
@@ -43,6 +45,45 @@ function buildTimelineHours(
 export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
   const { state, reload } = useDailyDetail(localDate);
   const [selectedCheckInId, setSelectedCheckInId] = useState<string | null>(null);
+  const { reflectionRepository, draftRepository, uuid, now } = useDailyReflectionDependencies();
+  const [bodyText, setBodyText] = useState('');
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (state.status !== 'loaded') return;
+    setBodyText(state.reflection?.body ?? state.draft ?? '');
+    setIsCompleted(state.reflection !== null);
+  }, [state]);
+
+  const onChangeBody = (text: string) => {
+    setBodyText(text);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    debounceRef.current = setTimeout(() => {
+      if (isCompleted) {
+        void saveDailyReflection(localDate, text, { repository: reflectionRepository, uuid, now }).catch(() => {
+          // Silently retried on the next debounce cycle.
+        });
+      } else {
+        void draftRepository.saveDraft(localDate, text).catch(() => {
+          // Silently retried on the next debounce cycle.
+        });
+      }
+    }, 500);
+  };
+
+  const complete = async () => {
+    setSaveError(null);
+    try {
+      await saveDailyReflection(localDate, bodyText, { repository: reflectionRepository, uuid, now });
+      await draftRepository.clearDraft(localDate);
+      setIsCompleted(true);
+    } catch {
+      setSaveError('회고를 저장하지 못했어요. 다시 시도해 주세요.');
+    }
+  };
 
   if (state.status === 'loading') {
     return (
@@ -138,6 +179,24 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
           </View>
         </>
       )}
+
+      <View style={styles.reflection}>
+        <Text style={styles.reflectionLabel}>회고</Text>
+        <TextInput
+          testID="daily-detail-reflection-input"
+          style={styles.reflectionInput}
+          multiline
+          placeholder="오늘 하루를 돌아보며 남기고 싶은 말을 적어보세요."
+          value={bodyText}
+          onChangeText={onChangeBody}
+        />
+        {!isCompleted && (
+          <Pressable accessibilityRole="button" accessibilityLabel="완료" onPress={() => { void complete(); }} style={styles.completeButton}>
+            <Text style={styles.completeButtonText}>완료</Text>
+          </Pressable>
+        )}
+        {saveError && <Text style={styles.errorText}>{saveError}</Text>}
+      </View>
     </SafeAreaView>
   );
 }
@@ -162,4 +221,10 @@ const styles = StyleSheet.create({
   timelineSlotFilled: { backgroundColor: '#eef2ff' },
   timelineSlotSelected: { borderColor: '#2e6af0' },
   timelineHour: { fontSize: 12, color: '#1b1b1b' },
+  reflection: { padding: 16, gap: 8 },
+  reflectionLabel: { fontSize: 16, fontWeight: '700', color: '#1b1b1b' },
+  reflectionInput: { minHeight: 96, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, fontSize: 15, color: '#1b1b1b', textAlignVertical: 'top' },
+  completeButton: { alignSelf: 'flex-start', borderRadius: 10, backgroundColor: '#2e6af0', paddingHorizontal: 16, paddingVertical: 10 },
+  completeButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+  errorText: { fontSize: 13, color: '#c0392b' },
 });
