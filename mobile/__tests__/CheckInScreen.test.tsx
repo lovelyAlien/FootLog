@@ -52,6 +52,10 @@ class FakeCheckInRepository implements CheckInRepository {
   }
 
   async deleteById(): Promise<void> {}
+
+  async listLocalDatesWithCheckIns(): Promise<string[]> {
+    return [];
+  }
 }
 
 class RejectOnceCheckInRepository extends FakeCheckInRepository {

@@ -1,6 +1,8 @@
 import { TZDate } from '@date-fns/tz';
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { formatLocalDate } from '../../shared/localDate';
+
 import type { CheckIn, CheckInRepository } from './domain';
 
 type CheckInRow = {
@@ -30,6 +32,24 @@ function localDayBounds(localDate: string, timezone: string): [string, string] {
   const [year, month, day] = localDate.split('-').map(Number);
   const start = new TZDate(year, month - 1, day, timezone);
   const end = new TZDate(year, month - 1, day + 1, timezone);
+
+  return [
+    new Date(start.getTime()).toISOString(),
+    new Date(end.getTime()).toISOString(),
+  ];
+}
+
+const SELECT_IN_MONTH = `
+SELECT checked_in_at FROM check_ins
+WHERE checked_in_at >= ? AND checked_in_at < ?
+ORDER BY checked_in_at ASC;
+`;
+
+function localMonthBounds(year: number, month: number, timezone: string): [string, string] {
+  const start = new TZDate(year, month - 1, 1, timezone);
+  const end = month === 12
+    ? new TZDate(year + 1, 0, 1, timezone)
+    : new TZDate(year, month, 1, timezone);
 
   return [
     new Date(start.getTime()).toISOString(),
@@ -76,5 +96,13 @@ export class SQLiteCheckInRepository implements CheckInRepository {
 
   async deleteById(id: string): Promise<void> {
     await this.db.runAsync('DELETE FROM check_ins WHERE id = ?;', id);
+  }
+
+  async listLocalDatesWithCheckIns(year: number, month: number, timezone: string): Promise<string[]> {
+    const [start, end] = localMonthBounds(year, month, timezone);
+    const rows = await this.db.getAllAsync<{ checked_in_at: string }>(SELECT_IN_MONTH, start, end);
+
+    const localDates = new Set(rows.map((row) => formatLocalDate(new Date(row.checked_in_at), timezone)));
+    return [...localDates].sort();
   }
 }
