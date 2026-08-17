@@ -70,15 +70,17 @@ describe('SQLiteDailyReflectionRepository', () => {
     const repository = new SQLiteDailyReflectionRepository(db as never);
 
     await repository.save({ id: 'reflection-1', localDate: '2026-08-16', body: '초안', updatedAt: '2026-08-16T09:00:00.000Z' });
-    await repository.save({ id: 'reflection-1', localDate: '2026-08-16', body: '수정된 회고', updatedAt: '2026-08-16T20:00:00.000Z' });
+    await repository.save({ id: 'a-different-id', localDate: '2026-08-16', body: '수정된 회고', updatedAt: '2026-08-16T20:00:00.000Z' });
 
     expect(rows).toHaveLength(1);
-    await expect(repository.getByLocalDate('2026-08-16')).resolves.toEqual({
+    const result = await repository.getByLocalDate('2026-08-16');
+    expect(result).toEqual({
       id: 'reflection-1',
       localDate: '2026-08-16',
       body: '수정된 회고',
       updatedAt: '2026-08-16T20:00:00.000Z',
     });
+    expect(result?.id).toBe('reflection-1');
   });
 
   it('deletes only the reflection for the requested date', async () => {
