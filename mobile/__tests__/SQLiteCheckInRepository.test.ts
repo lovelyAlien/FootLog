@@ -165,4 +165,38 @@ describe('SQLiteCheckInRepository', () => {
       '2026-08-15',
     ]);
   });
+
+  it('lists local dates for December, rolling the upper bound into the following January', async () => {
+    const rows: CheckInRow[] = [
+      rowFor({
+        id: 'd', checkedInAt: '2026-11-30T15:00:00.000Z', capturedAt: '2026-11-30T15:00:00.000Z',
+        latitude: 37.5, longitude: 127.0, accuracyM: 3, createdAt: '2026-11-30T15:00:00.000Z', syncStatus: 'pending',
+      }), // 2026-12-01 00:00 in Asia/Seoul
+      rowFor({
+        id: 'e', checkedInAt: '2026-12-15T10:00:00.000Z', capturedAt: '2026-12-15T10:00:00.000Z',
+        latitude: 37.5, longitude: 127.0, accuracyM: 3, createdAt: '2026-12-15T10:00:00.000Z', syncStatus: 'pending',
+      }), // 2026-12-15 19:00 in Asia/Seoul
+      rowFor({
+        id: 'f', checkedInAt: '2026-12-31T15:30:00.000Z', capturedAt: '2026-12-31T15:30:00.000Z',
+        latitude: 37.5, longitude: 127.0, accuracyM: 3, createdAt: '2026-12-31T15:30:00.000Z', syncStatus: 'pending',
+      }), // 2027-01-01 00:30 in Asia/Seoul, should be excluded
+    ];
+    const db = {
+      getFirstAsync: jest.fn(),
+      execAsync: jest.fn(),
+      withTransactionAsync: jest.fn(),
+      runAsync: jest.fn(),
+      getAllAsync: jest.fn(async (_sql: string, start: string, end: string) =>
+        rows
+          .filter((row) => row.checked_in_at >= start && row.checked_in_at < end)
+          .sort((a, b) => a.checked_in_at.localeCompare(b.checked_in_at)),
+      ),
+    };
+    const repository = new SQLiteCheckInRepository(db as never);
+
+    await expect(repository.listLocalDatesWithCheckIns(2026, 12, 'Asia/Seoul')).resolves.toEqual([
+      '2026-12-01',
+      '2026-12-15',
+    ]);
+  });
 });
