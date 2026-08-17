@@ -32,7 +32,7 @@ jest.mock('../src/features/daily-reflection/DailyReflectionContext', () => ({
   }),
 }));
 
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 
 import { DailyDetailScreen } from '../src/features/daily-reflection/DailyDetailScreen';
 import type { CheckIn } from '../src/features/check-in/domain';
@@ -92,6 +92,49 @@ describe('DailyDetailScreen', () => {
     expect(
       view.getByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.'),
     ).toBeTruthy();
+  });
+
+  it('wraps the loaded content in a ScrollView so the reflection editor and 완료 button stay reachable', async () => {
+    const checkIn = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-16T09:00:00.000Z' });
+    mockUseDailyDetail.mockReturnValue({
+      state: { status: 'loaded', checkIns: [checkIn], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
+      reload: jest.fn(),
+    });
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+
+    const scrollView = view.getByTestId('daily-detail-scroll');
+    // 'RCTScrollView' is the native host component name that ScrollView (and
+    // only ScrollView, not a plain View) renders to — this proves the node is
+    // an actual scrollable container, not just any tagged view.
+    expect(scrollView.type).toBe('RCTScrollView');
+    // The reflection input and the 완료 button must live inside the scrollable
+    // container, not below a fixed viewport where they'd be unreachable.
+    expect(within(scrollView).getByTestId('daily-detail-reflection-input')).toBeTruthy();
+    expect(within(scrollView).getByRole('button', { name: '완료' })).toBeTruthy();
+  });
+
+  it('keeps a check-in outside the activity window reachable on the timeline and synced to its pin', async () => {
+    // With TZ pinned to Asia/Seoul (UTC+9), 2026-08-15T17:00:00.000Z is local
+    // 2026-08-16T02:00, which falls outside the activityWindow [7, 23] below.
+    const outsideCheckIn = buildCheckIn({ id: 'c-outside', checkedInAt: '2026-08-15T17:00:00.000Z' });
+    mockUseDailyDetail.mockReturnValue({
+      state: { status: 'loaded', checkIns: [outsideCheckIn], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
+      reload: jest.fn(),
+    });
+    const view = await render(<DailyDetailScreen localDate="2026-08-16" />);
+
+    // The check-in must have a real (non-empty) timeline slot despite being
+    // outside the configured activity window.
+    expect(view.getByTestId('daily-detail-timeline-c-outside')).toBeTruthy();
+    expect(view.queryByTestId('daily-detail-timeline-empty-2')).toBeNull();
+
+    await fireEvent.press(view.getByTestId('daily-detail-pin-c-outside'));
+
+    await waitFor(() => {
+      const timelineSlot = view.getByTestId('daily-detail-timeline-c-outside');
+      const flattenedStyle = [timelineSlot.props.style].flat();
+      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: '#2e6af0' })]));
+    });
   });
 
   it('syncs selection between a map pin and its timeline slot', async () => {
@@ -189,9 +232,11 @@ describe('DailyDetailScreen', () => {
     await waitFor(() => expect(view.queryByRole('button', { name: '완료' })).toBeNull());
   });
 
-  it('keeps the entered body and shows an error message when completion fails', async () => {
+  it('keeps the entered body, shows an error message, and preserves the text as a draft when completion fails', async () => {
     mockReflectionRepository.getByLocalDate.mockResolvedValue(null);
     mockReflectionRepository.save.mockRejectedValue(new Error('disk full'));
+    mockDraftRepository.saveDraft.mockClear();
+    mockDraftRepository.saveDraft.mockResolvedValue(undefined);
     mockUseDailyDetail.mockReturnValue({
       state: { status: 'loaded', checkIns: [], reflection: null, draft: null, activityWindow: { startHour: 7, endHour: 23 } },
       reload: jest.fn(),
@@ -203,6 +248,9 @@ describe('DailyDetailScreen', () => {
 
     await waitFor(() => expect(view.getByText('회고를 저장하지 못했어요. 다시 시도해 주세요.')).toBeTruthy());
     expect(view.getByTestId('daily-detail-reflection-input').props.value).toBe('실패할 회고');
+    // The failed completion must not silently lose the typed text: it should
+    // be written to the draft store so it survives navigating away.
+    await waitFor(() => expect(mockDraftRepository.saveDraft).toHaveBeenCalledWith('2026-08-16', '실패할 회고'));
   });
 
   it('prefills from a completed reflection rather than the draft, and has no 완료 button', async () => {

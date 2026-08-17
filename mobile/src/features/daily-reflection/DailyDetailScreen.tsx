@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
@@ -36,8 +36,12 @@ function buildTimelineHours(
     if (!checkInByHour.has(hour)) checkInByHour.set(hour, checkIn);
   }
 
-  return Array.from({ length: endHour - startHour + 1 }, (_, index) => {
-    const hour = startHour + index;
+  const checkInHours = Array.from(checkInByHour.keys());
+  const effectiveStartHour = checkInHours.length > 0 ? Math.min(startHour, ...checkInHours) : startHour;
+  const effectiveEndHour = checkInHours.length > 0 ? Math.max(endHour, ...checkInHours) : endHour;
+
+  return Array.from({ length: effectiveEndHour - effectiveStartHour + 1 }, (_, index) => {
+    const hour = effectiveStartHour + index;
     return { hour, checkIn: checkInByHour.get(hour) ?? null };
   });
 }
@@ -85,6 +89,9 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
       setIsCompleted(true);
     } catch {
       setSaveError('회고를 저장하지 못했어요. 다시 시도해 주세요.');
+      void draftRepository.saveDraft(localDate, bodyText).catch(() => {
+        // Best-effort: preserve the typed text on disk even though completion failed.
+      });
     }
   };
 
@@ -116,96 +123,103 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.title}>{localDate}</Text>
-        <Text style={styles.subtitle}>체크인 {summary.checkInCount}개</Text>
-      </View>
-
-      {checkIns.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyText}>이날은 남겨진 발자국이 없어요.</Text>
+      <ScrollView
+        testID="daily-detail-scroll"
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>{localDate}</Text>
+          <Text style={styles.subtitle}>체크인 {summary.checkInCount}개</Text>
         </View>
-      ) : (
-        <>
-          <MapView
-            style={styles.map}
-            initialRegion={{
-              latitude: sortedCheckIns[0].latitude,
-              longitude: sortedCheckIns[0].longitude,
-              latitudeDelta: 0.02,
-              longitudeDelta: 0.02,
-            }}
-          >
-            {sortedCheckIns.map((checkIn) => (
-              <Marker
-                key={checkIn.id}
-                testID={`daily-detail-pin-${checkIn.id}`}
-                coordinate={{ latitude: checkIn.latitude, longitude: checkIn.longitude }}
-                pinColor={checkIn.id === selectedCheckInId ? '#2e6af0' : undefined}
-                onPress={() => setSelectedCheckInId(checkIn.id)}
-              />
-            ))}
-            <Polyline coordinates={sortedCheckIns.map((checkIn) => ({ latitude: checkIn.latitude, longitude: checkIn.longitude }))} />
-          </MapView>
-          <Text style={styles.mapCaption}>선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.</Text>
 
-          <View style={styles.summary}>
-            <Text style={styles.summaryText}>
-              첫 체크인 {formatLocalTime(summary.firstCheckedInAt!)} · 마지막 체크인 {formatLocalTime(summary.lastCheckedInAt!)}
-            </Text>
-            <Text style={styles.summaryText}>이동 거리 약 {Math.round(summary.approximateDistanceMeters)}m</Text>
-            {summary.longestConsecutiveArea && (
+        {checkIns.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>이날은 남겨진 발자국이 없어요.</Text>
+          </View>
+        ) : (
+          <>
+            <MapView
+              style={styles.map}
+              initialRegion={{
+                latitude: sortedCheckIns[0].latitude,
+                longitude: sortedCheckIns[0].longitude,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+              }}
+            >
+              {sortedCheckIns.map((checkIn) => (
+                <Marker
+                  key={checkIn.id}
+                  testID={`daily-detail-pin-${checkIn.id}`}
+                  coordinate={{ latitude: checkIn.latitude, longitude: checkIn.longitude }}
+                  pinColor={checkIn.id === selectedCheckInId ? '#2e6af0' : undefined}
+                  onPress={() => setSelectedCheckInId(checkIn.id)}
+                />
+              ))}
+              <Polyline coordinates={sortedCheckIns.map((checkIn) => ({ latitude: checkIn.latitude, longitude: checkIn.longitude }))} />
+            </MapView>
+            <Text style={styles.mapCaption}>선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.</Text>
+
+            <View style={styles.summary}>
               <Text style={styles.summaryText}>
-                가장 오래 머문 영역 {formatDuration(summary.longestConsecutiveArea.startedAt, summary.longestConsecutiveArea.endedAt)}
+                첫 체크인 {formatLocalTime(summary.firstCheckedInAt!)} · 마지막 체크인 {formatLocalTime(summary.lastCheckedInAt!)}
               </Text>
-            )}
-          </View>
+              <Text style={styles.summaryText}>이동 거리 약 {Math.round(summary.approximateDistanceMeters)}m</Text>
+              {summary.longestConsecutiveArea && (
+                <Text style={styles.summaryText}>
+                  가장 오래 머문 영역 {formatDuration(summary.longestConsecutiveArea.startedAt, summary.longestConsecutiveArea.endedAt)}
+                </Text>
+              )}
+            </View>
 
-          <View style={styles.timeline}>
-            {timelineHours.map(({ hour, checkIn }) => (
-              <Pressable
-                key={hour}
-                disabled={!checkIn}
-                accessibilityRole={checkIn ? 'button' : undefined}
-                accessibilityLabel={checkIn ? `${hour}시 체크인` : undefined}
-                testID={checkIn ? `daily-detail-timeline-${checkIn.id}` : `daily-detail-timeline-empty-${hour}`}
-                onPress={() => checkIn && setSelectedCheckInId(checkIn.id)}
-                style={[
-                  styles.timelineSlot,
-                  checkIn && styles.timelineSlotFilled,
-                  checkIn?.id === selectedCheckInId && styles.timelineSlotSelected,
-                ]}
-              >
-                <Text style={styles.timelineHour}>{String(hour).padStart(2, '0')}:00</Text>
-              </Pressable>
-            ))}
-          </View>
-        </>
-      )}
-
-      <View style={styles.reflection}>
-        <Text style={styles.reflectionLabel}>회고</Text>
-        <TextInput
-          testID="daily-detail-reflection-input"
-          style={styles.reflectionInput}
-          multiline
-          placeholder="오늘 하루를 돌아보며 남기고 싶은 말을 적어보세요."
-          value={bodyText}
-          onChangeText={onChangeBody}
-        />
-        {!isCompleted && (
-          <Pressable accessibilityRole="button" accessibilityLabel="완료" onPress={() => { void complete(); }} style={styles.completeButton}>
-            <Text style={styles.completeButtonText}>완료</Text>
-          </Pressable>
+            <View style={styles.timeline}>
+              {timelineHours.map(({ hour, checkIn }) => (
+                <Pressable
+                  key={hour}
+                  disabled={!checkIn}
+                  accessibilityRole={checkIn ? 'button' : undefined}
+                  accessibilityLabel={checkIn ? `${hour}시 체크인` : undefined}
+                  testID={checkIn ? `daily-detail-timeline-${checkIn.id}` : `daily-detail-timeline-empty-${hour}`}
+                  onPress={() => checkIn && setSelectedCheckInId(checkIn.id)}
+                  style={[
+                    styles.timelineSlot,
+                    checkIn && styles.timelineSlotFilled,
+                    checkIn?.id === selectedCheckInId && styles.timelineSlotSelected,
+                  ]}
+                >
+                  <Text style={styles.timelineHour}>{String(hour).padStart(2, '0')}:00</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
         )}
-        {saveError && <Text style={styles.errorText}>{saveError}</Text>}
-      </View>
+
+        <View style={styles.reflection}>
+          <Text style={styles.reflectionLabel}>회고</Text>
+          <TextInput
+            testID="daily-detail-reflection-input"
+            style={styles.reflectionInput}
+            multiline
+            placeholder="오늘 하루를 돌아보며 남기고 싶은 말을 적어보세요."
+            value={bodyText}
+            onChangeText={onChangeBody}
+          />
+          {!isCompleted && (
+            <Pressable accessibilityRole="button" accessibilityLabel="완료" onPress={() => { void complete(); }} style={styles.completeButton}>
+              <Text style={styles.completeButtonText}>완료</Text>
+            </Pressable>
+          )}
+          {saveError && <Text style={styles.errorText}>{saveError}</Text>}
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#ffffff' },
+  scrollContent: { flexGrow: 1, paddingBottom: 24 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
   message: { fontSize: 16, color: '#515151', textAlign: 'center' },
   retryButton: { borderRadius: 12, backgroundColor: '#2e6af0', paddingHorizontal: 20, paddingVertical: 14 },
