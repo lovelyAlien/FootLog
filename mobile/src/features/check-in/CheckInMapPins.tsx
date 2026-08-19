@@ -22,7 +22,9 @@ export function CheckInMapPins({ checkIns, selectedCheckInId, onSelectCheckIn, t
           onPress={() => onSelectCheckIn(checkIn.id)}
         />
       ))}
-      <Polyline coordinates={checkIns.map((checkIn) => ({ latitude: checkIn.latitude, longitude: checkIn.longitude }))} />
+      {checkIns.length >= 2 && (
+        <Polyline coordinates={checkIns.map((checkIn) => ({ latitude: checkIn.latitude, longitude: checkIn.longitude }))} />
+      )}
     </>
   );
 }
