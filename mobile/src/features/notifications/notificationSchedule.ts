@@ -6,6 +6,7 @@ export type ActivityWindow = {
 type BuildHourlyCheckInTimesOptions = {
   now: Date;
   window: ActivityWindow;
+  intervalHours: number;
   days: number;
 };
 
@@ -20,11 +21,7 @@ function cloneDate(date: Date): Date {
   return construct ? construct.call(date, date.getTime()) : new Date(date.getTime());
 }
 
-export function buildHourlyCheckInTimes({
-  now,
-  window,
-  days,
-}: BuildHourlyCheckInTimesOptions): Date[] {
+function assertValidWindow(window: ActivityWindow): void {
   if (
     !Number.isInteger(window.startHour)
     || !Number.isInteger(window.endHour)
@@ -34,6 +31,22 @@ export function buildHourlyCheckInTimes({
   ) {
     throw new RangeError('startHour must be earlier than endHour');
   }
+}
+
+function assertValidInterval(intervalHours: number): void {
+  if (intervalHours !== 1 && intervalHours !== 2 && intervalHours !== 3) {
+    throw new RangeError('intervalHours must be 1, 2, or 3');
+  }
+}
+
+export function buildHourlyCheckInTimes({
+  now,
+  window,
+  intervalHours,
+  days,
+}: BuildHourlyCheckInTimesOptions): Date[] {
+  assertValidWindow(window);
+  assertValidInterval(intervalHours);
 
   if (!Number.isInteger(days) || days < 1) {
     throw new RangeError('days must be a positive integer');
@@ -42,7 +55,7 @@ export function buildHourlyCheckInTimes({
   const times: Date[] = [];
 
   for (let dayOffset = 0; dayOffset < days; dayOffset += 1) {
-    for (let hour = window.startHour; hour <= window.endHour; hour += 1) {
+    for (let hour = window.startHour; hour <= window.endHour; hour += intervalHours) {
       const candidate = cloneDate(now);
       candidate.setDate(now.getDate() + dayOffset);
       candidate.setHours(hour, 0, 0, 0);
@@ -55,4 +68,11 @@ export function buildHourlyCheckInTimes({
   }
 
   return times.sort((left, right) => left.getTime() - right.getTime());
+}
+
+export function countScheduledNotificationsPerDay(window: ActivityWindow, intervalHours: number): number {
+  assertValidWindow(window);
+  assertValidInterval(intervalHours);
+
+  return Math.floor((window.endHour - window.startHour) / intervalHours) + 1;
 }

@@ -1,12 +1,13 @@
 import { TZDate } from '@date-fns/tz';
 
-import { buildHourlyCheckInTimes } from '../src/features/notifications/notificationSchedule';
+import { buildHourlyCheckInTimes, countScheduledNotificationsPerDay } from '../src/features/notifications/notificationSchedule';
 
 describe('buildHourlyCheckInTimes', () => {
   it('returns every remaining whole activity hour across the requested local calendar days', () => {
     const times = buildHourlyCheckInTimes({
       now: new Date('2026-08-06T08:32:00+09:00'),
       window: { startHour: 7, endHour: 23 },
+      intervalHours: 1,
       days: 2,
     });
 
@@ -23,6 +24,7 @@ describe('buildHourlyCheckInTimes', () => {
     const times = buildHourlyCheckInTimes({
       now,
       window: { startHour: 7, endHour: 10 },
+      intervalHours: 1,
       days: 1,
     });
 
@@ -32,12 +34,26 @@ describe('buildHourlyCheckInTimes', () => {
     ]);
   });
 
+  it('steps by the requested interval and drops a trailing hour that does not land on it', () => {
+    const now = new Date('2026-08-06T00:00:00+09:00');
+
+    const times = buildHourlyCheckInTimes({
+      now,
+      window: { startHour: 7, endHour: 22 },
+      intervalHours: 2,
+      days: 1,
+    });
+
+    expect(times.map((time) => time.getHours())).toEqual([7, 9, 11, 13, 15, 17, 19, 21]);
+  });
+
   it('builds the next day from calendar components when the timezone offset changes', () => {
     const now = new TZDate(2026, 2, 7, 6, 30, 'America/New_York');
 
     const times = buildHourlyCheckInTimes({
       now,
       window: { startHour: 7, endHour: 8 },
+      intervalHours: 1,
       days: 2,
     });
 
@@ -54,8 +70,24 @@ describe('buildHourlyCheckInTimes', () => {
     { startHour: 23, endHour: 7 },
     { startHour: 7, endHour: 7 },
   ])('rejects an unsupported activity window $startHour-$endHour', (window) => {
-    expect(() => buildHourlyCheckInTimes({ now: new Date(), window, days: 2 })).toThrow(
+    expect(() => buildHourlyCheckInTimes({ now: new Date(), window, intervalHours: 1, days: 2 })).toThrow(
       'startHour must be earlier than endHour',
     );
+  });
+
+  it.each([0, 4, 1.5])('rejects an unsupported interval %s', (intervalHours) => {
+    expect(() => buildHourlyCheckInTimes({
+      now: new Date(), window: { startHour: 7, endHour: 23 }, intervalHours, days: 2,
+    })).toThrow('intervalHours must be 1, 2, or 3');
+  });
+});
+
+describe('countScheduledNotificationsPerDay', () => {
+  it.each([
+    { window: { startHour: 7, endHour: 23 }, intervalHours: 1, expected: 17 },
+    { window: { startHour: 7, endHour: 22 }, intervalHours: 2, expected: 8 },
+    { window: { startHour: 7, endHour: 23 }, intervalHours: 3, expected: 6 },
+  ])('counts $expected notifications for $window with $intervalHours-hour interval', ({ window, intervalHours, expected }) => {
+    expect(countScheduledNotificationsPerDay(window, intervalHours)).toBe(expected);
   });
 });
