@@ -144,7 +144,18 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
             <Stack.Screen name="check-in" options={{ title: '' }} />
             <Stack.Screen name="day/[date]" options={{ title: '일일 회고' }} />
-            <Stack.Screen name="settings/reminders" options={{ title: '체크인 알림' }} />
+            <Stack.Screen
+              name="settings/reminders"
+              options={{
+                title: '체크인 알림',
+                // The activity-window slider's left handle sits close to the screen edge for
+                // early start hours (e.g. the 07:00 "출근형" preset), where iOS's edge
+                // swipe-to-go-back gesture intercepts the drag before the slider's own
+                // PanResponder sees it. The header already provides an explicit back button,
+                // so disabling the swipe here loses no way to navigate back.
+                gestureEnabled: false,
+              }}
+            />
           </Stack>
         </DailyReflectionProvider>
       </NotificationSettingsProvider>
