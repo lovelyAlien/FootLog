@@ -6,13 +6,16 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFootLogRepository } from '../../src/database/FootLogContext';
 import { localDateAndTimezone } from '../../src/shared/localDate';
 import { colors } from '../../src/shared/theme';
-import { TodayCheckIns } from '../../src/features/check-in/TodayCheckIns';
+import { TodayMapSheet } from '../../src/features/check-in/TodayMapSheet';
+import { ExpoLocationGateway } from '../../src/features/check-in/ExpoLocationGateway';
+import { resolveInitialMapRegion, type MapRegion } from '../../src/features/check-in/resolveInitialMapRegion';
 import type { CheckIn } from '../../src/features/check-in/domain';
 
 export default function TodayRoute() {
   const router = useRouter();
   const repository = useFootLogRepository();
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
+  const [initialRegion, setInitialRegion] = useState<MapRegion | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -23,9 +26,16 @@ export default function TodayRoute() {
       setIsLoading(true);
       setHasError(false);
 
-      void repository.listByLocalDay(localDate, timezone)
-        .then((records) => {
-          if (isCurrent) setCheckIns(records);
+      const locationGateway = new ExpoLocationGateway();
+      const locationFix = locationGateway.requestForegroundPermission()
+        .then((permission) => (permission === 'granted' ? locationGateway.getCurrentFix() : null))
+        .catch(() => null);
+
+      void Promise.all([repository.listByLocalDay(localDate, timezone), locationFix])
+        .then(([records, fix]) => {
+          if (!isCurrent) return;
+          setCheckIns(records);
+          setInitialRegion(resolveInitialMapRegion(fix, records));
         })
         .catch(() => {
           if (isCurrent) setHasError(true);
@@ -40,13 +50,14 @@ export default function TodayRoute() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {isLoading ? (
+      {isLoading || !initialRegion ? (
         <View style={styles.centered}><Text style={styles.message}>오늘의 발자국을 불러오는 중이에요.</Text></View>
       ) : hasError ? (
         <View style={styles.centered}><Text style={styles.message}>오늘의 발자국을 불러오지 못했어요.</Text></View>
       ) : (
-        <TodayCheckIns
+        <TodayMapSheet
           checkIns={checkIns}
+          initialRegion={initialRegion}
           onStartCheckIn={() => router.push('/check-in')}
           onOpenReminderSettings={() => router.push('/settings/reminders')}
         />
