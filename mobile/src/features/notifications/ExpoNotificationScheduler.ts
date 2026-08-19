@@ -11,7 +11,7 @@ export type NotificationScheduleResult =
   | { status: 'denied' };
 
 export interface NotificationScheduler {
-  reschedule(window: ActivityWindow): Promise<NotificationScheduleResult>;
+  reschedule(window: ActivityWindow, intervalHours: number): Promise<NotificationScheduleResult>;
   disable(window: ActivityWindow): Promise<void>;
   refreshIfEnabled(): Promise<void>;
 }
@@ -24,19 +24,25 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  async reschedule(window: ActivityWindow): Promise<NotificationScheduleResult> {
-    return this.enqueue(() => this.performReschedule(window));
+  async reschedule(window: ActivityWindow, intervalHours: number): Promise<NotificationScheduleResult> {
+    return this.enqueue(() => this.performReschedule(window, intervalHours));
   }
 
   async refreshIfEnabled(): Promise<void> {
     return this.enqueue(async () => {
       const current = await this.settingsRepository.getNotificationSettings();
       if (!current.enabled) return;
-      await this.performReschedule({ startHour: current.startHour, endHour: current.endHour });
+      await this.performReschedule(
+        { startHour: current.startHour, endHour: current.endHour },
+        current.intervalHours,
+      );
     });
   }
 
-  private async performReschedule(window: ActivityWindow): Promise<NotificationScheduleResult> {
+  private async performReschedule(
+    window: ActivityWindow,
+    intervalHours: number,
+  ): Promise<NotificationScheduleResult> {
     const current = await this.settingsRepository.getNotificationSettings();
 
     const permission = current.enabled
@@ -48,6 +54,7 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
       await this.settingsRepository.setNotificationSettings({
         enabled: false,
         ...window,
+        intervalHours,
         scheduledIds: [],
       });
       return { status: 'denied' };
@@ -64,7 +71,7 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
         });
       }
 
-      for (const date of buildHourlyCheckInTimes({ now: this.now(), window, days: 2 })) {
+      for (const date of buildHourlyCheckInTimes({ now: this.now(), window, intervalHours, days: 2 })) {
         const identifier = await Notifications.scheduleNotificationAsync({
           content: {
             title: '체크인할 시간이에요',
@@ -83,13 +90,14 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
       await this.settingsRepository.setNotificationSettings({
         enabled: true,
         ...window,
+        intervalHours,
         scheduledIds,
       });
 
       return { status: 'scheduled', scheduledIds };
     } catch (error) {
       const orphanedIds = await this.cancelIdentifiersBestEffort(scheduledIds);
-      await this.recoverDisabledSettings(window, orphanedIds);
+      await this.recoverDisabledSettings(window, intervalHours, orphanedIds);
       throw error;
     }
   }
@@ -101,6 +109,7 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
       await this.settingsRepository.setNotificationSettings({
         enabled: false,
         ...window,
+        intervalHours: current.intervalHours,
         scheduledIds: [],
       });
     });
@@ -119,11 +128,16 @@ export class ExpoNotificationScheduler implements NotificationScheduler {
     return identifiers.filter((_, index) => results[index].status === 'rejected');
   }
 
-  private async recoverDisabledSettings(window: ActivityWindow, orphanedIds: string[]): Promise<void> {
+  private async recoverDisabledSettings(
+    window: ActivityWindow,
+    intervalHours: number,
+    orphanedIds: string[],
+  ): Promise<void> {
     try {
       await this.settingsRepository.setNotificationSettings({
         enabled: false,
         ...window,
+        intervalHours,
         scheduledIds: orphanedIds,
       });
     } catch {

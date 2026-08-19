@@ -23,6 +23,7 @@ function createRepository(initial: {
   enabled: boolean;
   startHour: number;
   endHour: number;
+  intervalHours: number;
   scheduledIds: string[];
 }): NotificationSettingsRepository & { setNotificationSettings: jest.Mock } {
   return {
@@ -54,10 +55,10 @@ describe('ExpoNotificationScheduler', () => {
   });
 
   it('requests permission when enabling and schedules check-in notifications with the FootLog route', async () => {
-    const repository = createRepository({ enabled: false, startHour: 7, endHour: 23, scheduledIds: [] });
+    const repository = createRepository({ enabled: false, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: [] });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    const result = await scheduler.reschedule({ startHour: 9, endHour: 10 });
+    const result = await scheduler.reschedule({ startHour: 9, endHour: 10 }, 1);
 
     expect(mockRequestPermissionsAsync).toHaveBeenCalledTimes(1);
     expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(4);
@@ -84,11 +85,12 @@ describe('ExpoNotificationScheduler', () => {
       enabled: true,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: ['footlog-old-1', 'footlog-old-2'],
     });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await scheduler.reschedule({ startHour: 9, endHour: 10 });
+    await scheduler.reschedule({ startHour: 9, endHour: 10 }, 1);
 
     expect(mockGetPermissionsAsync).toHaveBeenCalledTimes(1);
     expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
@@ -100,15 +102,43 @@ describe('ExpoNotificationScheduler', () => {
       enabled: true,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
       scheduledIds: ['new-1', 'new-2', 'new-3', 'new-4'],
     });
   });
 
-  it('refreshes an enabled two-day schedule without asking for permission again', async () => {
+  it('persists a newly chosen interval when rescheduling', async () => {
+    mockScheduleNotificationAsync
+      .mockReset()
+      .mockResolvedValueOnce('new-1')
+      .mockResolvedValueOnce('new-2')
+      .mockResolvedValueOnce('new-3')
+      .mockResolvedValueOnce('new-4');
+    const repository = createRepository({
+      enabled: true, startHour: 7, endHour: 22, intervalHours: 1, scheduledIds: ['old-id'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T06:00:00+09:00'));
+
+    await scheduler.reschedule({ startHour: 7, endHour: 9 }, 2);
+
+    // Window 7-9 with a 2-hour interval yields hours [7, 9] each day; performReschedule
+    // always schedules 2 days ahead, so 2 hours x 2 days = 4 notifications.
+    expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(4);
+    expect(repository.setNotificationSettings).toHaveBeenLastCalledWith({
+      enabled: true,
+      startHour: 7,
+      endHour: 9,
+      intervalHours: 2,
+      scheduledIds: ['new-1', 'new-2', 'new-3', 'new-4'],
+    });
+  });
+
+  it('refreshes an enabled two-day schedule using the stored interval without asking for permission again', async () => {
     const repository = createRepository({
       enabled: true,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
       scheduledIds: ['expiring-footlog-id'],
     });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-08T08:32:00+09:00'));
@@ -122,6 +152,7 @@ describe('ExpoNotificationScheduler', () => {
       enabled: true,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
       scheduledIds: ['new-1', 'new-2', 'new-3', 'new-4'],
     });
   });
@@ -131,6 +162,7 @@ describe('ExpoNotificationScheduler', () => {
       enabled: false,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: [],
     });
     const scheduler = new ExpoNotificationScheduler(repository);
@@ -149,11 +181,12 @@ describe('ExpoNotificationScheduler', () => {
       enabled: true,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: ['footlog-old'],
     });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).resolves.toEqual({ status: 'denied' });
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 1)).resolves.toEqual({ status: 'denied' });
 
     expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
     expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith('footlog-old');
@@ -162,6 +195,27 @@ describe('ExpoNotificationScheduler', () => {
       enabled: false,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
+      scheduledIds: [],
+    });
+  });
+
+  it('persists the newly requested interval, not the stored one, when permission is denied', async () => {
+    mockGetPermissionsAsync.mockResolvedValue({
+      status: 'denied', granted: false, canAskAgain: true, expires: 'never',
+    });
+    const repository = createRepository({
+      enabled: true, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: ['footlog-old'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 3)).resolves.toEqual({ status: 'denied' });
+
+    expect(repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 10,
+      intervalHours: 3,
       scheduledIds: [],
     });
   });
@@ -170,26 +224,27 @@ describe('ExpoNotificationScheduler', () => {
     mockRequestPermissionsAsync.mockResolvedValue({
       status: 'denied', granted: false, canAskAgain: false, expires: 'never',
     });
-    const repository = createRepository({ enabled: false, startHour: 7, endHour: 23, scheduledIds: [] });
+    const repository = createRepository({ enabled: false, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: [] });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).resolves.toEqual({ status: 'denied' });
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 1)).resolves.toEqual({ status: 'denied' });
 
     expect(mockScheduleNotificationAsync).not.toHaveBeenCalled();
     expect(repository.setNotificationSettings).toHaveBeenLastCalledWith({
       enabled: false,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
       scheduledIds: [],
     });
   });
 
   it('uses the hourly-check-ins Android channel', async () => {
     jest.replaceProperty(Platform, 'OS', 'android');
-    const repository = createRepository({ enabled: false, startHour: 7, endHour: 23, scheduledIds: [] });
+    const repository = createRepository({ enabled: false, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: [] });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await scheduler.reschedule({ startHour: 9, endHour: 10 });
+    await scheduler.reschedule({ startHour: 9, endHour: 10 }, 1);
 
     expect(mockSetNotificationChannelAsync).toHaveBeenCalledWith('hourly-check-ins', {
       name: '시간별 체크인',
@@ -197,11 +252,12 @@ describe('ExpoNotificationScheduler', () => {
     });
   });
 
-  it('disables reminders by canceling only stored identifiers', async () => {
+  it('disables reminders by canceling only stored identifiers and preserves the stored interval', async () => {
     const repository = createRepository({
       enabled: true,
       startHour: 8,
       endHour: 21,
+      intervalHours: 3,
       scheduledIds: ['footlog-1', 'footlog-2'],
     });
     const scheduler = new ExpoNotificationScheduler(repository);
@@ -216,6 +272,7 @@ describe('ExpoNotificationScheduler', () => {
       enabled: false,
       startHour: 8,
       endHour: 21,
+      intervalHours: 3,
       scheduledIds: [],
     });
     expect(mockRequestPermissionsAsync).not.toHaveBeenCalled();
@@ -227,6 +284,7 @@ describe('ExpoNotificationScheduler', () => {
       enabled: false,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: [],
     });
     repository.setNotificationSettings
@@ -234,7 +292,7 @@ describe('ExpoNotificationScheduler', () => {
       .mockResolvedValueOnce(undefined);
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(persistenceError);
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 1)).rejects.toBe(persistenceError);
 
     expect(mockCancelScheduledNotificationAsync.mock.calls).toEqual([
       ['new-1'],
@@ -254,11 +312,12 @@ describe('ExpoNotificationScheduler', () => {
       enabled: false,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: [],
     });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 1)).rejects.toBe(schedulingError);
 
     expect(mockCancelScheduledNotificationAsync).toHaveBeenCalledWith('partial-new-1');
   });
@@ -274,16 +333,18 @@ describe('ExpoNotificationScheduler', () => {
       enabled: false,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: [],
     });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 1)).rejects.toBe(schedulingError);
 
     expect(repository.setNotificationSettings).toHaveBeenLastCalledWith({
       enabled: false,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
       scheduledIds: ['orphaned-new-id'],
     });
   });
@@ -295,16 +356,37 @@ describe('ExpoNotificationScheduler', () => {
       enabled: true,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: ['old-footlog-id'],
     });
     const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
 
-    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 })).rejects.toBe(schedulingError);
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 1)).rejects.toBe(schedulingError);
 
     expect(repository.setNotificationSettings).toHaveBeenCalledWith({
       enabled: false,
       startHour: 9,
       endHour: 10,
+      intervalHours: 1,
+      scheduledIds: [],
+    });
+  });
+
+  it('persists the newly requested interval, not the stored one, when rebuilding fails', async () => {
+    const schedulingError = new Error('schedule failed');
+    mockScheduleNotificationAsync.mockReset().mockRejectedValueOnce(schedulingError);
+    const repository = createRepository({
+      enabled: true, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: ['old-footlog-id'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 3)).rejects.toBe(schedulingError);
+
+    expect(repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 10,
+      intervalHours: 3,
       scheduledIds: [],
     });
   });

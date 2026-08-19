@@ -7,6 +7,9 @@ import type {
   NotificationSettings,
   NotificationSettingsRepository,
 } from '../settings/AppSettingsRepository';
+import { ACTIVITY_WINDOW_PRESETS, matchPreset } from './activityWindowPresets';
+import { ActivityWindowSlider } from './ActivityWindowSlider';
+import { countScheduledNotificationsPerDay, type ActivityWindow } from './notificationSchedule';
 import type { NotificationScheduler } from './ExpoNotificationScheduler';
 
 type NotificationSettingsScreenProps = {
@@ -14,11 +17,7 @@ type NotificationSettingsScreenProps = {
   scheduler: NotificationScheduler;
 };
 
-const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
-
-function formatHour(hour: number): string {
-  return `${hour.toString().padStart(2, '0')}:00`;
-}
+const INTERVAL_OPTIONS = [1, 2, 3];
 
 export function NotificationSettingsScreen({
   repository,
@@ -29,19 +28,15 @@ export function NotificationSettingsScreen({
   const [enabled, setEnabled] = useState(false);
   const [startHour, setStartHour] = useState(7);
   const [endHour, setEndHour] = useState(23);
-  const [savedWindow, setSavedWindow] = useState({ startHour: 7, endHour: 23 });
+  const [intervalHours, setIntervalHours] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
   const busyRef = useRef(false);
 
   const applySettings = useCallback((settings: NotificationSettings) => {
-    const authoritativeWindow = {
-      startHour: settings.startHour,
-      endHour: settings.endHour,
-    };
     setEnabled(settings.enabled);
     setStartHour(settings.startHour);
     setEndHour(settings.endHour);
-    setSavedWindow(authoritativeWindow);
+    setIntervalHours(settings.intervalHours);
   }, []);
 
   useEffect(() => {
@@ -71,29 +66,30 @@ export function NotificationSettingsScreen({
     setMessage(errorMessage);
   };
 
-  const isValidWindow = startHour < endHour;
-  const window = { startHour, endHour };
-
-  const setReminderEnabled = async (nextEnabled: boolean) => {
-    if (busyRef.current || (nextEnabled && !isValidWindow)) return;
+  const applyChange = async (nextWindow: ActivityWindow, nextIntervalHours: number) => {
+    if (busyRef.current) return;
     busyRef.current = true;
     setIsBusy(true);
     setMessage(null);
+    setStartHour(nextWindow.startHour);
+    setEndHour(nextWindow.endHour);
+    setIntervalHours(nextIntervalHours);
 
     try {
-      if (nextEnabled) {
-        const result = await scheduler.reschedule(window);
+      if (enabled) {
+        const result = await scheduler.reschedule(nextWindow, nextIntervalHours);
         if (result.status === 'denied') {
           setEnabled(false);
-          setSavedWindow(window);
           setMessage('알림 권한이 꺼져 있어요. 기기 설정에서 허용한 뒤 다시 시도해 주세요.');
-        } else {
-          setEnabled(true);
-          setSavedWindow(window);
         }
       } else {
-        await scheduler.disable(savedWindow);
-        setEnabled(false);
+        const current = await repository.getNotificationSettings();
+        await repository.setNotificationSettings({
+          enabled: false,
+          ...nextWindow,
+          intervalHours: nextIntervalHours,
+          scheduledIds: current.scheduledIds,
+        });
       }
     } catch {
       await syncAfterFailure('알림 설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -103,33 +99,27 @@ export function NotificationSettingsScreen({
     }
   };
 
-  const saveWindow = async () => {
-    if (busyRef.current || !isValidWindow) return;
+  const setReminderEnabled = async (nextEnabled: boolean) => {
+    if (busyRef.current) return;
     busyRef.current = true;
     setIsBusy(true);
     setMessage(null);
 
     try {
-      if (enabled) {
-        const result = await scheduler.reschedule(window);
+      if (nextEnabled) {
+        const result = await scheduler.reschedule({ startHour, endHour }, intervalHours);
         if (result.status === 'denied') {
           setEnabled(false);
-          setSavedWindow(window);
           setMessage('알림 권한이 꺼져 있어요. 기기 설정에서 허용한 뒤 다시 시도해 주세요.');
         } else {
-          setSavedWindow(window);
+          setEnabled(true);
         }
       } else {
-        const current = await repository.getNotificationSettings();
-        await repository.setNotificationSettings({
-          enabled: false,
-          ...window,
-          scheduledIds: current.scheduledIds,
-        });
-        setSavedWindow(window);
+        await scheduler.disable({ startHour, endHour });
+        setEnabled(false);
       }
     } catch {
-      await syncAfterFailure('알림 시간을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      await syncAfterFailure('알림 설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       busyRef.current = false;
       setIsBusy(false);
@@ -144,96 +134,86 @@ export function NotificationSettingsScreen({
     );
   }
 
+  const selectedPresetId = matchPreset(startHour, endHour);
+  const dailyCount = countScheduledNotificationsPerDay({ startHour, endHour }, intervalHours);
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.heading}>
           <Text style={styles.title}>체크인 알림</Text>
-          <Text style={styles.body}>활동 시간 동안 매시 정각에 발자국을 남기도록 알려 드려요.</Text>
+          <Text style={styles.body}>활동 시간 동안 설정한 간격으로 발자국을 남기도록 알려 드려요.</Text>
         </View>
 
         <View style={styles.settingRow}>
           <View style={styles.settingCopy}>
             <Text style={styles.settingTitle}>시간별 체크인 알림</Text>
-            <Text style={styles.body}>{formatHour(startHour)}–{formatHour(endHour)}</Text>
           </View>
           <Switch
             accessibilityLabel="시간별 체크인 알림"
-            disabled={isBusy || (!enabled && !isValidWindow)}
+            disabled={isBusy}
             onValueChange={(value) => { void setReminderEnabled(value); }}
             value={enabled}
           />
         </View>
 
-        <HourSelector
-          label="시작 시간"
-          selectedHour={startHour}
-          disabled={isBusy}
-          onSelect={setStartHour}
-        />
-        <HourSelector
-          label="종료 시간"
-          selectedHour={endHour}
-          disabled={isBusy}
-          onSelect={setEndHour}
-        />
-
-        {!isValidWindow && (
-          <Text accessibilityRole="alert" style={styles.error}>
-            종료 시간은 시작 시간보다 늦어야 해요
-          </Text>
-        )}
-        {message && <Text accessibilityRole="alert" style={styles.message}>{message}</Text>}
-
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="알림 시간 저장"
-          accessibilityState={{ disabled: isBusy || !isValidWindow }}
-          disabled={isBusy || !isValidWindow}
-          onPress={() => { void saveWindow(); }}
-          style={[styles.saveButton, (isBusy || !isValidWindow) && styles.disabledButton]}
-        >
-          <Text style={styles.saveButtonText}>알림 시간 저장</Text>
-        </Pressable>
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-type HourSelectorProps = {
-  label: string;
-  selectedHour: number;
-  disabled: boolean;
-  onSelect: (hour: number) => void;
-};
-
-function HourSelector({ label, selectedHour, disabled, onSelect }: HourSelectorProps) {
-  return (
-    <View style={styles.selector}>
-      <Text style={styles.settingTitle}>{label}</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        <View style={styles.hourOptions}>
-          {HOURS.map((hour) => {
-            const selected = hour === selectedHour;
+        <View style={styles.presetRow}>
+          {ACTIVITY_WINDOW_PRESETS.map((preset) => {
+            const selected = selectedPresetId === preset.id;
             return (
               <Pressable
-                key={hour}
+                key={preset.id}
                 accessibilityRole="button"
-                accessibilityLabel={`${label} ${formatHour(hour)}`}
-                accessibilityState={{ selected, disabled }}
-                disabled={disabled}
-                onPress={() => onSelect(hour)}
-                style={[styles.hourOption, selected && styles.selectedHourOption]}
+                accessibilityLabel={preset.label}
+                accessibilityState={{ selected, disabled: isBusy }}
+                disabled={isBusy}
+                onPress={() => { void applyChange({ startHour: preset.startHour, endHour: preset.endHour }, intervalHours); }}
+                style={[styles.presetChip, selected && styles.selectedPresetChip]}
               >
-                <Text style={[styles.hourOptionText, selected && styles.selectedHourOptionText]}>
-                  {formatHour(hour)}
-                </Text>
+                <Text style={[styles.presetChipText, selected && styles.selectedPresetChipText]}>{preset.label}</Text>
               </Pressable>
             );
           })}
         </View>
+
+        {selectedPresetId === null && (
+          <Text style={styles.customWindowLabel}>직접 설정</Text>
+        )}
+
+        <ActivityWindowSlider
+          startHour={startHour}
+          endHour={endHour}
+          disabled={isBusy}
+          onChangeEnd={(nextWindow) => { void applyChange(nextWindow, intervalHours); }}
+        />
+
+        <View style={styles.intervalSection}>
+          <Text style={styles.settingTitle}>알림 간격</Text>
+          <View style={styles.intervalRow}>
+            {INTERVAL_OPTIONS.map((hours) => {
+              const selected = hours === intervalHours;
+              return (
+                <Pressable
+                  key={hours}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${hours}시간 간격`}
+                  accessibilityState={{ selected, disabled: isBusy }}
+                  disabled={isBusy}
+                  onPress={() => { void applyChange({ startHour, endHour }, hours); }}
+                  style={[styles.intervalOption, selected && styles.selectedIntervalOption]}
+                >
+                  <Text style={[styles.intervalOptionText, selected && styles.selectedIntervalOptionText]}>{hours}시간</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
+        <Text style={styles.summary}>하루 {dailyCount}회 알림</Text>
+
+        {message && <Text accessibilityRole="alert" style={styles.message}>{message}</Text>}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -247,15 +227,18 @@ const styles = StyleSheet.create({
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   settingCopy: { flex: 1, gap: 4 },
   settingTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
-  selector: { gap: 12 },
-  hourOptions: { flexDirection: 'row', gap: 8 },
-  hourOption: { borderWidth: 1, borderColor: colors.optionBorder, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  selectedHourOption: { backgroundColor: colors.primary, borderColor: colors.primary },
-  hourOptionText: { color: colors.optionText, fontSize: 15, fontWeight: '600' },
-  selectedHourOptionText: { color: colors.onPrimary },
-  error: { color: colors.error, fontSize: 15, lineHeight: 22 },
+  presetRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
+  presetChip: { borderWidth: 1, borderColor: colors.optionBorder, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 8 },
+  selectedPresetChip: { backgroundColor: colors.primary, borderColor: colors.primary },
+  presetChipText: { color: colors.optionText, fontSize: 14, fontWeight: '600' },
+  selectedPresetChipText: { color: colors.onPrimary },
+  customWindowLabel: { fontSize: 13, color: colors.textMuted },
+  intervalSection: { gap: 10 },
+  intervalRow: { flexDirection: 'row', gap: 8 },
+  intervalOption: { flex: 1, alignItems: 'center', borderWidth: 1, borderColor: colors.optionBorder, borderRadius: 10, paddingVertical: 10 },
+  selectedIntervalOption: { backgroundColor: colors.primary, borderColor: colors.primary },
+  intervalOptionText: { color: colors.optionText, fontSize: 15, fontWeight: '600' },
+  selectedIntervalOptionText: { color: colors.onPrimary },
+  summary: { fontSize: 14, color: colors.textMuted, textAlign: 'center' },
   message: { color: colors.noticeText, backgroundColor: colors.noticeBackground, borderRadius: 10, padding: 14, fontSize: 15, lineHeight: 22 },
-  saveButton: { alignItems: 'center', borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 16 },
-  disabledButton: { opacity: 0.4 },
-  saveButtonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
 });
