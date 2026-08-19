@@ -9,6 +9,7 @@ function createDependencies(options?: { enabled?: boolean; permissionDenied?: bo
     enabled: options?.enabled ?? false,
     startHour: 7,
     endHour: 23,
+    intervalHours: 1,
     scheduledIds: options?.enabled ? ['stored-footlog-id'] : [],
   };
   const repository: NotificationSettingsRepository & { setNotificationSettings: jest.Mock } = {
@@ -27,22 +28,24 @@ function createDependencies(options?: { enabled?: boolean; permissionDenied?: bo
 }
 
 describe('NotificationSettingsScreen', () => {
-  it('starts disabled with the default 07:00–23:00 activity window', async () => {
+  it('starts disabled with the default window, interval, and daily count', async () => {
     const dependencies = createDependencies();
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
 
-    await waitFor(() => expect(view.getByText('07:00–23:00')).toBeTruthy());
+    await waitFor(() => expect(view.getByText('07:00 – 23:00')).toBeTruthy());
     expect(view.getByRole('switch', { name: '시간별 체크인 알림' }).props.value).toBe(false);
+    expect(view.getByRole('button', { name: '1시간 간격' }).props.accessibilityState.selected).toBe(true);
+    expect(view.getByText('하루 17회 알림')).toBeTruthy();
   });
 
-  it('enables reminders by rescheduling the selected activity window', async () => {
+  it('enables reminders by rescheduling the current window and interval', async () => {
     const dependencies = createDependencies();
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
     const toggle = await view.findByRole('switch', { name: '시간별 체크인 알림' });
 
     await act(async () => { fireEvent(toggle, 'valueChange', true); });
 
-    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 7, endHour: 23 });
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 7, endHour: 23 }, 1);
     await waitFor(() => expect(view.getByRole('switch', { name: '시간별 체크인 알림' }).props.value).toBe(true));
   });
 
@@ -57,20 +60,6 @@ describe('NotificationSettingsScreen', () => {
     expect(view.getByText(/알림 권한이 꺼져 있어요/)).toBeTruthy();
   });
 
-  it('rebuilds schedules after saving a changed hour while enabled', async () => {
-    const dependencies = createDependencies({ enabled: true });
-    const view = await render(<NotificationSettingsScreen {...dependencies} />);
-    await view.findByText('07:00–23:00');
-
-    await fireEvent.press(view.getByRole('button', { name: '시작 시간 08:00' }));
-    await fireEvent.press(view.getByRole('button', { name: '알림 시간 저장' }));
-
-    await waitFor(() => expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({
-      startHour: 8,
-      endHour: 23,
-    }));
-  });
-
   it('disables reminders through the scheduler so only its stored identifiers are canceled', async () => {
     const dependencies = createDependencies({ enabled: true });
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
@@ -81,59 +70,75 @@ describe('NotificationSettingsScreen', () => {
     expect(dependencies.scheduler.disable).toHaveBeenCalledWith({ startHour: 7, endHour: 23 });
   });
 
-  it('blocks saving an invalid activity window and shows guidance', async () => {
-    const dependencies = createDependencies();
-    const view = await render(<NotificationSettingsScreen {...dependencies} />);
-    await view.findByText('07:00–23:00');
-
-    await fireEvent.press(view.getByRole('button', { name: '시작 시간 23:00' }));
-
-    expect(view.getByText('종료 시간은 시작 시간보다 늦어야 해요')).toBeTruthy();
-    expect(view.getByRole('button', { name: '알림 시간 저장' }).props.accessibilityState.disabled).toBe(true);
-  });
-
-  it('preserves orphan notification identifiers when saving a disabled window', async () => {
-    const repository: NotificationSettingsRepository & { setNotificationSettings: jest.Mock } = {
-      getNotificationSettings: jest.fn(async () => ({
-        enabled: false,
-        startHour: 7,
-        endHour: 23,
-        scheduledIds: ['cleanup-still-needed'],
-      })),
-      setNotificationSettings: jest.fn(async () => undefined),
-    };
-    const scheduler: NotificationScheduler = {
-      reschedule: jest.fn(),
-      disable: jest.fn(),
-      refreshIfEnabled: jest.fn(),
-    };
-    const view = await render(
-      <NotificationSettingsScreen repository={repository} scheduler={scheduler} />,
-    );
-    await view.findByText('07:00–23:00');
-
-    await fireEvent.press(view.getByRole('button', { name: '시작 시간 08:00' }));
-    await fireEvent.press(view.getByRole('button', { name: '알림 시간 저장' }));
-
-    await waitFor(() => expect(repository.setNotificationSettings).toHaveBeenCalledWith({
-      enabled: false,
-      startHour: 8,
-      endHour: 23,
-      scheduledIds: ['cleanup-still-needed'],
-    }));
-  });
-
-  it('still disables enabled reminders with the saved window when the draft is invalid', async () => {
+  it('applies a preset immediately without a separate save step', async () => {
     const dependencies = createDependencies({ enabled: true });
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
-    await view.findByText('07:00–23:00');
+    await view.findByText('07:00 – 23:00');
 
-    await fireEvent.press(view.getByRole('button', { name: '시작 시간 23:00' }));
-    const toggle = view.getByRole('switch', { name: '시간별 체크인 알림' });
-    await act(async () => { fireEvent(toggle, 'valueChange', false); });
+    await act(async () => { fireEvent.press(view.getByRole('button', { name: '아침형' })); });
 
-    expect(dependencies.scheduler.disable).toHaveBeenCalledWith({ startHour: 7, endHour: 23 });
-    await waitFor(() => expect(view.getByRole('switch', { name: '시간별 체크인 알림' }).props.value).toBe(false));
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 5, endHour: 20 }, 1);
+    await waitFor(() => expect(view.getByText('05:00 – 20:00')).toBeTruthy());
+    expect(view.getByRole('button', { name: '아침형' }).props.accessibilityState.selected).toBe(true);
+  });
+
+  it('applies an interval change immediately and updates the daily count', async () => {
+    const dependencies = createDependencies({ enabled: true });
+    const view = await render(<NotificationSettingsScreen {...dependencies} />);
+    await view.findByText('07:00 – 23:00');
+
+    await act(async () => { fireEvent.press(view.getByRole('button', { name: '2시간 간격' })); });
+
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 7, endHour: 23 }, 2);
+    await waitFor(() => expect(view.getByText('하루 9회 알림')).toBeTruthy());
+  });
+
+  it('applies a slider change (via accessibility increment) immediately', async () => {
+    const dependencies = createDependencies({ enabled: true });
+    const view = await render(<NotificationSettingsScreen {...dependencies} />);
+    await view.findByText('07:00 – 23:00');
+
+    await act(async () => {
+      fireEvent(view.getByLabelText('시작 시간'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    });
+
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 1);
+  });
+
+  it('uses the latest interval when the slider changes after an interval switch', async () => {
+    // Regression test: ActivityWindowSlider (Task 7) freezes its onChangeEnd closure at
+    // mount via useState(() => createResponder(...)). If the callback passed from here
+    // captured `intervalHours` directly, dragging the slider after switching intervals
+    // would silently reschedule with the stale mount-time interval.
+    const dependencies = createDependencies({ enabled: true });
+    const view = await render(<NotificationSettingsScreen {...dependencies} />);
+    await view.findByText('07:00 – 23:00');
+
+    await act(async () => { fireEvent.press(view.getByRole('button', { name: '2시간 간격' })); });
+    dependencies.scheduler.reschedule.mockClear();
+
+    await act(async () => {
+      fireEvent(view.getByLabelText('시작 시간'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    });
+
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 2);
+  });
+
+  it('persists a changed window while disabled without scheduling', async () => {
+    const dependencies = createDependencies({ enabled: false });
+    const view = await render(<NotificationSettingsScreen {...dependencies} />);
+    await view.findByText('07:00 – 23:00');
+
+    await act(async () => { fireEvent.press(view.getByRole('button', { name: '자유형' })); });
+
+    expect(dependencies.scheduler.reschedule).not.toHaveBeenCalled();
+    await waitFor(() => expect(dependencies.repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 23,
+      intervalHours: 1,
+      scheduledIds: [],
+    }));
   });
 
   it('syncs the switch and displayed window to recovered settings after rescheduling fails', async () => {
@@ -141,12 +146,14 @@ describe('NotificationSettingsScreen', () => {
       enabled: true,
       startHour: 7,
       endHour: 23,
+      intervalHours: 1,
       scheduledIds: ['stored-footlog-id'],
     };
     const recoveredSettings = {
       enabled: false,
-      startHour: 8,
-      endHour: 22,
+      startHour: 6,
+      endHour: 19,
+      intervalHours: 1,
       scheduledIds: [],
     };
     const repository: NotificationSettingsRepository = {
@@ -163,17 +170,17 @@ describe('NotificationSettingsScreen', () => {
     const view = await render(
       <NotificationSettingsScreen repository={repository} scheduler={scheduler} />,
     );
-    await view.findByText('07:00–23:00');
+    await view.findByText('07:00 – 23:00');
 
-    await fireEvent.press(view.getByRole('button', { name: '시작 시간 08:00' }));
-    await fireEvent.press(view.getByRole('button', { name: '알림 시간 저장' }));
+    await act(async () => { fireEvent.press(view.getByRole('button', { name: '아침형' })); });
 
+    // The screen optimistically shows the tapped preset (05:00–20:00) before the
+    // reschedule call resolves; asserting the *recovered* 06:00–19:00 here proves
+    // the failure path re-fetches from the repository instead of trusting the optimistic value.
     await waitFor(() => expect(
       view.getByRole('switch', { name: '시간별 체크인 알림' }).props.value,
     ).toBe(false));
-    expect(view.getByText('08:00–22:00')).toBeTruthy();
-    expect(view.getByRole('button', { name: '시작 시간 08:00' }).props.accessibilityState.selected).toBe(true);
-    expect(view.getByRole('button', { name: '종료 시간 22:00' }).props.accessibilityState.selected).toBe(true);
-    expect(view.getByText('알림 시간을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.')).toBeTruthy();
+    expect(view.getByText('06:00 – 19:00')).toBeTruthy();
+    expect(view.getByText('알림 설정을 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.')).toBeTruthy();
   });
 });
