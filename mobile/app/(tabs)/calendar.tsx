@@ -92,6 +92,14 @@ export default function CalendarRoute() {
           );
         })}
       </View>
+
+      <View style={styles.summary}>
+        <View style={styles.legendRow}>
+          <View style={styles.dot} />
+          <Text style={styles.legendText}>체크인 기록이 있는 날</Text>
+        </View>
+        <Text style={styles.summaryText}>이번 달 체크인 {datesWithCheckIns.size}일</Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -107,4 +115,8 @@ const styles = StyleSheet.create({
   cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
   dayText: { fontSize: 15, color: colors.textPrimary },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
+  summary: { paddingTop: 8, gap: 8, borderTopWidth: 1, borderTopColor: colors.border },
+  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendText: { fontSize: 13, color: colors.textMuted },
+  summaryText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
 });
