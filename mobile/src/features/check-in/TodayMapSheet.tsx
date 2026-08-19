@@ -59,7 +59,7 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
         <Text style={styles.fabText}>＋</Text>
       </Pressable>
 
-      <BottomSheet ref={sheetRef} index={PEEK_INDEX} snapPoints={SNAP_POINTS}>
+      <BottomSheet ref={sheetRef} index={PEEK_INDEX} snapPoints={SNAP_POINTS} enableDynamicSizing={false}>
         <View style={styles.sheetHeader}>
           <Text style={styles.title}>오늘</Text>
           {onOpenReminderSettings && (

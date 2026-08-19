@@ -16,13 +16,15 @@ jest.mock('react-native-maps', () => {
 
 const mockSnapToIndex = jest.fn();
 const mockScrollToIndex = jest.fn();
+const mockBottomSheetProps = jest.fn();
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const { View, FlatList } = require('react-native');
 
   const BottomSheet = React.forwardRef(
-    ({ children }: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
+    ({ children, ...rest }: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
+      mockBottomSheetProps(rest);
       React.useImperativeHandle(ref, () => ({ snapToIndex: mockSnapToIndex }));
       return <View testID="today-bottom-sheet">{children}</View>;
     },
@@ -61,6 +63,21 @@ describe('TodayMapSheet', () => {
   beforeEach(() => {
     mockSnapToIndex.mockClear();
     mockScrollToIndex.mockClear();
+    mockBottomSheetProps.mockClear();
+  });
+
+  it('disables dynamic sizing so the sheet respects its fixed snapPoints', async () => {
+    // enableDynamicSizing defaults to true in @gorhom/bottom-sheet, and combined with the
+    // conditional BottomSheetFlatList/empty-state content, that collapses the real sheet to
+    // zero visible height on device (confirmed in manual simulator QA — not reproducible
+    // against the mocked library, hence this explicit prop assertion as a regression guard).
+    await render(
+      <TodayMapSheet checkIns={[]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+
+    expect(mockBottomSheetProps).toHaveBeenCalledWith(
+      expect.objectContaining({ enableDynamicSizing: false }),
+    );
   });
 
   it('shows the empty state when there are no check-ins today', async () => {
