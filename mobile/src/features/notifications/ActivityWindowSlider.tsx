@@ -92,6 +92,7 @@ export function ActivityWindowSlider({ startHour, endHour, disabled, onChangeEnd
 
   const onAccessibilityAdjust = (handle: Handle, actionName: string) => {
     if (disabled) return;
+    if (actionName !== 'increment' && actionName !== 'decrement') return;
     const currentHour = handle === 'start' ? startHour : endHour;
     const delta = actionName === 'increment' ? 1 : -1;
     emitChange(handle, clampForHandle(handle, currentHour + delta));

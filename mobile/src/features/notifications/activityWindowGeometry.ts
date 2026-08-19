@@ -1,4 +1,5 @@
 const MAX_HOUR = 23;
+const MIN_HOUR = 0;
 
 export function hourFromOffset(offsetX: number, trackWidth: number): number {
   if (trackWidth <= 0) return 0;
@@ -11,9 +12,9 @@ export function offsetFromHour(hour: number, trackWidth: number): number {
 }
 
 export function clampStartHour(candidateHour: number, endHour: number): number {
-  return Math.min(candidateHour, endHour - 1);
+  return Math.min(Math.max(MIN_HOUR, candidateHour), endHour - 1);
 }
 
 export function clampEndHour(candidateHour: number, startHour: number): number {
-  return Math.max(candidateHour, startHour + 1);
+  return Math.max(Math.min(MAX_HOUR, candidateHour), startHour + 1);
 }

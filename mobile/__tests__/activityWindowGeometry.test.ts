@@ -36,6 +36,10 @@ describe('clampStartHour', () => {
     expect(clampStartHour(23, 10)).toBe(9);
     expect(clampStartHour(9, 10)).toBe(9);
   });
+
+  it('bounds the result to the valid hour range', () => {
+    expect(clampStartHour(-1, 23)).toBe(0);
+  });
 });
 
 describe('clampEndHour', () => {
@@ -43,5 +47,9 @@ describe('clampEndHour', () => {
     expect(clampEndHour(15, 7)).toBe(15);
     expect(clampEndHour(3, 7)).toBe(8);
     expect(clampEndHour(8, 7)).toBe(8);
+  });
+
+  it('bounds the result to the valid hour range', () => {
+    expect(clampEndHour(24, 7)).toBe(23);
   });
 });

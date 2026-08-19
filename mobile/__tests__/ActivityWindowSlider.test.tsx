@@ -45,6 +45,17 @@ describe('ActivityWindowSlider', () => {
     expect(onChangeEnd).toHaveBeenCalledWith({ startHour: 9, endHour: 10 });
   });
 
+  it('does not let the end hour exceed the valid range when incremented at the ceiling', async () => {
+    const onChangeEnd = jest.fn();
+    const view = await render(
+      <ActivityWindowSlider startHour={7} endHour={23} disabled={false} onChangeEnd={onChangeEnd} />,
+    );
+
+    await fireEvent(view.getByLabelText('종료 시간'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+
+    expect(onChangeEnd).toHaveBeenCalledWith({ startHour: 7, endHour: 23 });
+  });
+
   it('ignores accessibility actions while disabled', async () => {
     const onChangeEnd = jest.fn();
     const view = await render(

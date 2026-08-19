@@ -90,4 +90,10 @@ describe('countScheduledNotificationsPerDay', () => {
   ])('counts $expected notifications for $window with $intervalHours-hour interval', ({ window, intervalHours, expected }) => {
     expect(countScheduledNotificationsPerDay(window, intervalHours)).toBe(expected);
   });
+
+  it('rejects an out-of-range window instead of returning a bogus count', () => {
+    expect(() => countScheduledNotificationsPerDay({ startHour: 0, endHour: 24 }, 1)).toThrow(
+      'startHour must be earlier than endHour',
+    );
+  });
 });
