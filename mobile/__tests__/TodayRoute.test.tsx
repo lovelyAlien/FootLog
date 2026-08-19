@@ -123,6 +123,15 @@ describe('TodayRoute', () => {
     expect(mockPush).toHaveBeenCalledWith('/settings/reminders');
   });
 
+  it('shows the error message when listByLocalDay rejects on the first load', async () => {
+    mockRepository.listByLocalDay = jest.fn().mockRejectedValue(new Error('db not ready'));
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+
+    await waitFor(() => expect(view.getByText('오늘의 발자국을 불러오지 못했어요.')).toBeTruthy());
+    expect(view.queryByText('오늘의 발자국을 불러오는 중이에요.')).toBeNull();
+  });
+
   it('refreshes check-ins after the route regains focus', async () => {
     mockRepository.listByLocalDay
       .mockResolvedValueOnce([firstCheckIn])

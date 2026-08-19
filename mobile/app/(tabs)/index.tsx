@@ -15,7 +15,7 @@ export default function TodayRoute() {
   const router = useRouter();
   const repository = useFootLogRepository();
   const [checkIns, setCheckIns] = useState<CheckIn[]>([]);
-  const [initialRegion, setInitialRegion] = useState<MapRegion | null>(null);
+  const [initialRegion, setInitialRegion] = useState<MapRegion>(resolveInitialMapRegion(null, []));
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
 
@@ -50,7 +50,7 @@ export default function TodayRoute() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {isLoading || !initialRegion ? (
+      {isLoading ? (
         <View style={styles.centered}><Text style={styles.message}>오늘의 발자국을 불러오는 중이에요.</Text></View>
       ) : hasError ? (
         <View style={styles.centered}><Text style={styles.message}>오늘의 발자국을 불러오지 못했어요.</Text></View>
