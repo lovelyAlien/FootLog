@@ -145,4 +145,92 @@ describe('TodayRoute', () => {
     await act(async () => { mockFocusEffect?.(); });
     await waitFor(() => expect(mockRepository.listByLocalDay).toHaveBeenCalledTimes(2));
   });
+
+  it('falls back to the most recent check-in when getCurrentFix rejects (not just when permission is denied)', async () => {
+    mockGetCurrentFix = jest.fn().mockRejectedValue(new Error('fix failed'));
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+
+    await waitFor(() => {
+      expect(view.getByTestId('today-map').props.initialRegion).toEqual({
+        latitude: 37.5, longitude: 127.0, latitudeDelta: 0.02, longitudeDelta: 0.02,
+      });
+    });
+  });
+
+  it('renders the check-in list immediately without waiting for a still-pending location fix', async () => {
+    let resolveFix: (value: unknown) => void = () => {};
+    mockGetCurrentFix = jest.fn(() => new Promise((resolve) => { resolveFix = resolve; }));
+
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+
+    await waitFor(() => expect(view.getByTestId('today-map')).toBeTruthy());
+    expect(view.queryByText('오늘의 발자국을 불러오는 중이에요.')).toBeNull();
+    expect(view.getByTestId('today-map').props.initialRegion).toEqual({
+      latitude: 37.5, longitude: 127.0, latitudeDelta: 0.02, longitudeDelta: 0.02,
+    });
+
+    // Resolve the still-pending fix so it doesn't leak state updates into later tests.
+    await act(async () => {
+      resolveFix({ latitude: 1, longitude: 1, accuracyM: 5, capturedAt: '2026-01-01T00:00:00.000Z' });
+    });
+  });
+
+  it('refines the initial region once a slower location fix resolves after check-ins are already shown', async () => {
+    let resolveFix: (value: unknown) => void = () => {};
+    mockGetCurrentFix = jest.fn(() => new Promise((resolve) => { resolveFix = resolve; }));
+
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+
+    await waitFor(() => expect(view.getByTestId('today-map')).toBeTruthy());
+    expect(view.getByTestId('today-map').props.initialRegion.latitude).toBe(37.5);
+
+    await act(async () => {
+      resolveFix({ latitude: 37.5665, longitude: 126.978, accuracyM: 10, capturedAt: '2026-08-06T00:00:00.000Z' });
+    });
+
+    await waitFor(() => {
+      expect(view.getByTestId('today-map').props.initialRegion).toEqual({
+        latitude: 37.5665, longitude: 126.978, latitudeDelta: 0.02, longitudeDelta: 0.02,
+      });
+    });
+  });
+
+  it('stops waiting for the location fix after a timeout and keeps the fallback region', async () => {
+    jest.useFakeTimers();
+    mockGetCurrentFix = jest.fn(() => new Promise(() => {}));
+
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+
+    await waitFor(() => expect(view.getByTestId('today-map')).toBeTruthy());
+
+    await act(async () => { jest.advanceTimersByTime(3000); });
+
+    expect(view.getByTestId('today-map').props.initialRegion).toEqual({
+      latitude: 37.5, longitude: 127.0, latitudeDelta: 0.02, longitudeDelta: 0.02,
+    });
+
+    jest.useRealTimers();
+  });
+
+  it('does not show the blocking loading screen (or remount the map) on a subsequent focus refresh', async () => {
+    let resolveSecondLoad: (value: CheckIn[]) => void = () => {};
+    mockRepository.listByLocalDay = jest.fn()
+      .mockResolvedValueOnce([firstCheckIn])
+      .mockImplementationOnce(() => new Promise((resolve) => { resolveSecondLoad = resolve; }));
+
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+    await waitFor(() => expect(view.getByTestId('today-map')).toBeTruthy());
+
+    await act(async () => { mockFocusEffect?.(); });
+
+    expect(view.queryByText('오늘의 발자국을 불러오는 중이에요.')).toBeNull();
+    expect(view.getByTestId('today-map')).toBeTruthy();
+
+    await act(async () => { resolveSecondLoad([]); });
+  });
 });
