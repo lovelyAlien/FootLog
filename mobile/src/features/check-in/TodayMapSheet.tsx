@@ -27,6 +27,7 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
     [checkIns],
   );
   const [selectedCheckInId, setSelectedCheckInId] = useState<string | null>(null);
+  const [sheetIndex, setSheetIndex] = useState(PEEK_INDEX);
   const sheetRef = useRef<ElementRef<typeof BottomSheet>>(null);
   const listRef = useRef<BottomSheetFlatListMethods>(null);
   const mapRef = useRef<ElementRef<typeof MapView>>(null);
@@ -87,7 +88,13 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
         />
       </MapView>
 
-      <BottomSheet ref={sheetRef} index={PEEK_INDEX} snapPoints={SNAP_POINTS} enableDynamicSizing={false}>
+      <BottomSheet
+        ref={sheetRef}
+        index={PEEK_INDEX}
+        snapPoints={SNAP_POINTS}
+        enableDynamicSizing={false}
+        onChange={setSheetIndex}
+      >
         <View style={styles.sheetHeader}>
           <Text style={styles.title}>오늘</Text>
           {onOpenReminderSettings && (
@@ -133,7 +140,10 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
         accessibilityRole="button"
         accessibilityLabel="지금 체크인"
         onPress={onStartCheckIn}
-        style={styles.fab}
+        // Hidden past the peek snap point: the expanded sheet's check-in list can scroll
+        // under this fixed-position button, so it would otherwise overlap list rows.
+        pointerEvents={sheetIndex === PEEK_INDEX ? 'auto' : 'none'}
+        style={[styles.fab, sheetIndex !== PEEK_INDEX && styles.fabHidden]}
       >
         <Text style={styles.fabText}>＋</Text>
       </Pressable>
@@ -160,6 +170,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
+  fabHidden: { opacity: 0 },
   fabText: { color: colors.onPrimary, fontSize: 28, fontWeight: '700', lineHeight: 30 },
   sheetHeader: {
     flexDirection: 'row',
