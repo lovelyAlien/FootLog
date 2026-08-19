@@ -4,27 +4,13 @@ import { NotificationSettingsScreen } from '../src/features/notifications/Notifi
 import type { NotificationScheduler } from '../src/features/notifications/ExpoNotificationScheduler';
 import type { NotificationSettingsRepository } from '../src/features/settings/AppSettingsRepository';
 
-type ActivityWindowSliderOnChangeEnd = (window: { startHour: number; endHour: number }) => void;
-
-const capturedSliderOnChangeEnds: ActivityWindowSliderOnChangeEnd[] = [];
-
-jest.mock('../src/features/notifications/ActivityWindowSlider', () => {
-  const actual = jest.requireActual('../src/features/notifications/ActivityWindowSlider');
-  return {
-    ActivityWindowSlider: (props: { onChangeEnd: ActivityWindowSliderOnChangeEnd; [key: string]: unknown }) => {
-      capturedSliderOnChangeEnds.push(props.onChangeEnd);
-      return <actual.ActivityWindowSlider {...props} />;
-    },
-  };
-});
-
-function createDependencies(options?: { enabled?: boolean; permissionDenied?: boolean }) {
+function createDependencies(options?: { enabled?: boolean; permissionDenied?: boolean; scheduledIds?: string[] }) {
   const settings = {
     enabled: options?.enabled ?? false,
     startHour: 7,
     endHour: 23,
     intervalHours: 1,
-    scheduledIds: options?.enabled ? ['stored-footlog-id'] : [],
+    scheduledIds: options?.scheduledIds ?? (options?.enabled ? ['stored-footlog-id'] : []),
   };
   const repository: NotificationSettingsRepository & { setNotificationSettings: jest.Mock } = {
     getNotificationSettings: jest.fn(async () => settings),
@@ -50,6 +36,8 @@ describe('NotificationSettingsScreen', () => {
     expect(view.getByRole('switch', { name: '시간별 체크인 알림' }).props.value).toBe(false);
     expect(view.getByRole('button', { name: '1시간 간격' }).props.accessibilityState.selected).toBe(true);
     expect(view.getByText('하루 17회 알림')).toBeTruthy();
+    expect(view.getByText('직접 설정')).toBeTruthy();
+    expect(view.queryByRole('button', { name: '알림 시간 저장' })).toBeNull();
   });
 
   it('enables reminders by rescheduling the current window and interval', async () => {
@@ -94,6 +82,7 @@ describe('NotificationSettingsScreen', () => {
     expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 5, endHour: 20 }, 1);
     await waitFor(() => expect(view.getByText('05:00 – 20:00')).toBeTruthy());
     expect(view.getByRole('button', { name: '아침형' }).props.accessibilityState.selected).toBe(true);
+    expect(view.queryByText('직접 설정')).toBeNull();
   });
 
   it('applies an interval change immediately and updates the daily count', async () => {
@@ -119,36 +108,46 @@ describe('NotificationSettingsScreen', () => {
     expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 1);
   });
 
-  it('uses the latest interval when the mount-time slider callback fires after an interval switch', async () => {
+  it('uses the latest interval when the mount-time slider PanResponder handlers fire after an interval switch', async () => {
     // Regression test: ActivityWindowSlider builds its internal PanResponder via
-    // useState(() => createResponder(...)) — a one-time lazy initializer — so whatever
-    // onChangeEnd reference it receives on its FIRST render is the one its
-    // onPanResponderRelease handler calls forever, no matter how many times this screen
-    // re-renders afterward. We capture that first-render reference (via the mock above)
-    // and invoke it directly, exactly as a real drag-release would, to prove the screen's
-    // handleSliderChange reads fresh state through refs rather than closing over
-    // `intervalHours`/`applyChange` by value. Driving this through the accessibility path
-    // instead would NOT catch a regression here, because ActivityWindowSlider recreates
-    // its onAccessibilityAction handler on every render — only the PanResponder path is
-    // frozen at mount.
-    capturedSliderOnChangeEnds.length = 0;
+    // useState(() => createResponder(...)) — a one-time lazy initializer — so the
+    // onResponderGrant/onResponderRelease handlers wired to the "종료 시간" thumb are
+    // captured here, at mount, and never recreated for the lifetime of the component.
+    // We hold onto those mount-time handler references and invoke them directly, exactly
+    // as a real drag-release would, after switching the interval, to prove
+    // ActivityWindowSlider's own onChangeEndRef (not the screen) is what keeps the
+    // eventual scheduler.reschedule call using fresh interval/window state. Driving this
+    // through the accessibility path instead would NOT catch a regression here, because
+    // ActivityWindowSlider recreates its onAccessibilityAction handler on every render —
+    // only the PanResponder path is frozen at mount.
     const dependencies = createDependencies({ enabled: true });
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
     await view.findByText('07:00 – 23:00');
 
-    expect(capturedSliderOnChangeEnds.length).toBeGreaterThan(0);
-    const mountTimeOnChangeEnd = capturedSliderOnChangeEnds[0];
+    const endThumb = view.getByLabelText('종료 시간');
+    const { onResponderGrant, onResponderRelease } = endThumb.props;
 
     await act(async () => { fireEvent.press(view.getByRole('button', { name: '2시간 간격' })); });
     dependencies.scheduler.reschedule.mockClear();
 
-    await act(async () => { mountTimeOnChangeEnd({ startHour: 8, endHour: 23 }); });
+    const touchHistory = {
+      touchBank: [{
+        touchActive: true, currentTimeStamp: 1, currentPageX: 100, currentPageY: 0, previousPageX: 100, previousPageY: 0,
+      }],
+      numberActiveTouches: 1,
+      indexOfSingleActiveTouch: 0,
+      mostRecentTimeStamp: 1,
+    };
+    await act(async () => {
+      onResponderGrant({ touchHistory, nativeEvent: {} });
+      onResponderRelease({ touchHistory, nativeEvent: {} });
+    });
 
-    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 2);
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 7, endHour: 23 }, 2);
   });
 
   it('persists a changed window while disabled without scheduling', async () => {
-    const dependencies = createDependencies({ enabled: false });
+    const dependencies = createDependencies({ enabled: false, scheduledIds: ['cleanup-still-needed'] });
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
     await view.findByText('07:00 – 23:00');
 
@@ -160,7 +159,7 @@ describe('NotificationSettingsScreen', () => {
       startHour: 9,
       endHour: 23,
       intervalHours: 1,
-      scheduledIds: [],
+      scheduledIds: ['cleanup-still-needed'],
     }));
   });
 

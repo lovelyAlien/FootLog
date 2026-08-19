@@ -31,21 +31,27 @@ export function ActivityWindowSlider({ startHour, endHour, disabled, onChangeEnd
   const trackWidthRef = useRef(trackWidth);
   const disabledRef = useRef(disabled);
   const dragRef = useRef<DragState | null>(null);
+  const onChangeEndRef = useRef(onChangeEnd);
 
   useEffect(() => {
     startHourRef.current = startHour;
     endHourRef.current = endHour;
     trackWidthRef.current = trackWidth;
     disabledRef.current = disabled;
+    onChangeEndRef.current = onChangeEnd;
   });
 
+  // PanResponder is created once (see the useState lazy initializers below), so emitChange
+  // must never close over the onChangeEnd prop by value — it reads through onChangeEndRef
+  // (kept fresh above) so a caller passing an unstable inline callback still gets the
+  // freshest reference on drag release, not whatever was passed at mount.
   const emitChange = useCallback((handle: Handle, hour: number) => {
-    onChangeEnd(
+    onChangeEndRef.current(
       handle === 'start'
         ? { startHour: hour, endHour: endHourRef.current }
         : { startHour: startHourRef.current, endHour: hour },
     );
-  }, [onChangeEnd]);
+  }, []);
 
   const clampForHandle = (handle: Handle, candidateHour: number): number => (
     handle === 'start'

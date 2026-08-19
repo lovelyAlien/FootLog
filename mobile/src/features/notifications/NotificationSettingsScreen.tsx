@@ -9,7 +9,7 @@ import type {
 } from '../settings/AppSettingsRepository';
 import { ACTIVITY_WINDOW_PRESETS, matchPreset } from './activityWindowPresets';
 import { ActivityWindowSlider } from './ActivityWindowSlider';
-import { countScheduledNotificationsPerDay } from './notificationSchedule';
+import { countScheduledNotificationsPerDay, type ActivityWindow } from './notificationSchedule';
 import type { NotificationScheduler } from './ExpoNotificationScheduler';
 
 type NotificationSettingsScreenProps = {
@@ -18,8 +18,6 @@ type NotificationSettingsScreenProps = {
 };
 
 const INTERVAL_OPTIONS = [1, 2, 3];
-
-type Window = { startHour: number; endHour: number };
 
 export function NotificationSettingsScreen({
   repository,
@@ -68,7 +66,7 @@ export function NotificationSettingsScreen({
     setMessage(errorMessage);
   };
 
-  const applyChange = async (nextWindow: Window, nextIntervalHours: number) => {
+  const applyChange = async (nextWindow: ActivityWindow, nextIntervalHours: number) => {
     if (busyRef.current) return;
     busyRef.current = true;
     setIsBusy(true);
@@ -100,24 +98,6 @@ export function NotificationSettingsScreen({
       setIsBusy(false);
     }
   };
-
-  // ActivityWindowSlider (Task 7) freezes its onChangeEnd reference at mount, so the
-  // callback handed to it below must never rely on values closed over by value — it
-  // reads through these refs (kept fresh every render) instead. The refs are written in
-  // a no-deps effect rather than during render, matching the same pattern
-  // ActivityWindowSlider itself uses to keep its refs fresh (react-hooks/refs forbids
-  // assigning to ref.current synchronously during render).
-  const applyChangeRef = useRef(applyChange);
-  const intervalHoursRef = useRef(intervalHours);
-
-  useEffect(() => {
-    applyChangeRef.current = applyChange;
-    intervalHoursRef.current = intervalHours;
-  });
-
-  const handleSliderChange = useCallback((window: Window) => {
-    void applyChangeRef.current(window, intervalHoursRef.current);
-  }, []);
 
   const setReminderEnabled = async (nextEnabled: boolean) => {
     if (busyRef.current) return;
@@ -162,7 +142,7 @@ export function NotificationSettingsScreen({
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.heading}>
           <Text style={styles.title}>체크인 알림</Text>
-          <Text style={styles.body}>활동 시간 동안 매시 정각에 발자국을 남기도록 알려 드려요.</Text>
+          <Text style={styles.body}>활동 시간 동안 설정한 간격으로 발자국을 남기도록 알려 드려요.</Text>
         </View>
 
         <View style={styles.settingRow}>
@@ -196,11 +176,15 @@ export function NotificationSettingsScreen({
           })}
         </View>
 
+        {selectedPresetId === null && (
+          <Text style={styles.customWindowLabel}>직접 설정</Text>
+        )}
+
         <ActivityWindowSlider
           startHour={startHour}
           endHour={endHour}
           disabled={isBusy}
-          onChangeEnd={handleSliderChange}
+          onChangeEnd={(nextWindow) => { void applyChange(nextWindow, intervalHours); }}
         />
 
         <View style={styles.intervalSection}>
@@ -248,6 +232,7 @@ const styles = StyleSheet.create({
   selectedPresetChip: { backgroundColor: colors.primary, borderColor: colors.primary },
   presetChipText: { color: colors.optionText, fontSize: 14, fontWeight: '600' },
   selectedPresetChipText: { color: colors.onPrimary },
+  customWindowLabel: { fontSize: 13, color: colors.textMuted },
   intervalSection: { gap: 10 },
   intervalRow: { flexDirection: 'row', gap: 8 },
   intervalOption: { flex: 1, alignItems: 'center', borderWidth: 1, borderColor: colors.optionBorder, borderRadius: 10, paddingVertical: 10 },
