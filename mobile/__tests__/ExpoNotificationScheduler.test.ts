@@ -111,7 +111,9 @@ describe('ExpoNotificationScheduler', () => {
     mockScheduleNotificationAsync
       .mockReset()
       .mockResolvedValueOnce('new-1')
-      .mockResolvedValueOnce('new-2');
+      .mockResolvedValueOnce('new-2')
+      .mockResolvedValueOnce('new-3')
+      .mockResolvedValueOnce('new-4');
     const repository = createRepository({
       enabled: true, startHour: 7, endHour: 22, intervalHours: 1, scheduledIds: ['old-id'],
     });
@@ -119,13 +121,15 @@ describe('ExpoNotificationScheduler', () => {
 
     await scheduler.reschedule({ startHour: 7, endHour: 9 }, 2);
 
-    expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(2);
+    // Window 7-9 with a 2-hour interval yields hours [7, 9] each day; performReschedule
+    // always schedules 2 days ahead, so 2 hours x 2 days = 4 notifications.
+    expect(mockScheduleNotificationAsync).toHaveBeenCalledTimes(4);
     expect(repository.setNotificationSettings).toHaveBeenLastCalledWith({
       enabled: true,
       startHour: 7,
       endHour: 9,
       intervalHours: 2,
-      scheduledIds: ['new-1', 'new-2'],
+      scheduledIds: ['new-1', 'new-2', 'new-3', 'new-4'],
     });
   });
 
