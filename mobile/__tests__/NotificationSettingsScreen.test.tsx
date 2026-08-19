@@ -4,6 +4,20 @@ import { NotificationSettingsScreen } from '../src/features/notifications/Notifi
 import type { NotificationScheduler } from '../src/features/notifications/ExpoNotificationScheduler';
 import type { NotificationSettingsRepository } from '../src/features/settings/AppSettingsRepository';
 
+type ActivityWindowSliderOnChangeEnd = (window: { startHour: number; endHour: number }) => void;
+
+const capturedSliderOnChangeEnds: ActivityWindowSliderOnChangeEnd[] = [];
+
+jest.mock('../src/features/notifications/ActivityWindowSlider', () => {
+  const actual = jest.requireActual('../src/features/notifications/ActivityWindowSlider');
+  return {
+    ActivityWindowSlider: (props: { onChangeEnd: ActivityWindowSliderOnChangeEnd; [key: string]: unknown }) => {
+      capturedSliderOnChangeEnds.push(props.onChangeEnd);
+      return <actual.ActivityWindowSlider {...props} />;
+    },
+  };
+});
+
 function createDependencies(options?: { enabled?: boolean; permissionDenied?: boolean }) {
   const settings = {
     enabled: options?.enabled ?? false,
@@ -105,21 +119,30 @@ describe('NotificationSettingsScreen', () => {
     expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 1);
   });
 
-  it('uses the latest interval when the slider changes after an interval switch', async () => {
-    // Regression test: ActivityWindowSlider (Task 7) freezes its onChangeEnd closure at
-    // mount via useState(() => createResponder(...)). If the callback passed from here
-    // captured `intervalHours` directly, dragging the slider after switching intervals
-    // would silently reschedule with the stale mount-time interval.
+  it('uses the latest interval when the mount-time slider callback fires after an interval switch', async () => {
+    // Regression test: ActivityWindowSlider builds its internal PanResponder via
+    // useState(() => createResponder(...)) — a one-time lazy initializer — so whatever
+    // onChangeEnd reference it receives on its FIRST render is the one its
+    // onPanResponderRelease handler calls forever, no matter how many times this screen
+    // re-renders afterward. We capture that first-render reference (via the mock above)
+    // and invoke it directly, exactly as a real drag-release would, to prove the screen's
+    // handleSliderChange reads fresh state through refs rather than closing over
+    // `intervalHours`/`applyChange` by value. Driving this through the accessibility path
+    // instead would NOT catch a regression here, because ActivityWindowSlider recreates
+    // its onAccessibilityAction handler on every render — only the PanResponder path is
+    // frozen at mount.
+    capturedSliderOnChangeEnds.length = 0;
     const dependencies = createDependencies({ enabled: true });
     const view = await render(<NotificationSettingsScreen {...dependencies} />);
     await view.findByText('07:00 – 23:00');
 
+    expect(capturedSliderOnChangeEnds.length).toBeGreaterThan(0);
+    const mountTimeOnChangeEnd = capturedSliderOnChangeEnds[0];
+
     await act(async () => { fireEvent.press(view.getByRole('button', { name: '2시간 간격' })); });
     dependencies.scheduler.reschedule.mockClear();
 
-    await act(async () => {
-      fireEvent(view.getByLabelText('시작 시간'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
-    });
+    await act(async () => { mountTimeOnChangeEnd({ startHour: 8, endHour: 23 }); });
 
     expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 2);
   });
