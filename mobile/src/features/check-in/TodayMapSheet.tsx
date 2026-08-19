@@ -29,6 +29,7 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
   const [selectedCheckInId, setSelectedCheckInId] = useState<string | null>(null);
   const sheetRef = useRef<ElementRef<typeof BottomSheet>>(null);
   const listRef = useRef<BottomSheetFlatListMethods>(null);
+  const mapRef = useRef<ElementRef<typeof MapView>>(null);
 
   const selectFromPin = useCallback((id: string) => {
     setSelectedCheckInId(id);
@@ -39,9 +40,29 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
     }
   }, [chronologicalCheckIns]);
 
+  const selectFromRow = useCallback((id: string) => {
+    setSelectedCheckInId(id);
+    const target = chronologicalCheckIns.find((checkIn) => checkIn.id === id);
+    if (target) {
+      mapRef.current?.animateToRegion({
+        latitude: target.latitude,
+        longitude: target.longitude,
+        latitudeDelta: 0.02,
+        longitudeDelta: 0.02,
+      }, 300);
+    }
+  }, [chronologicalCheckIns]);
+
+  const handleScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
+    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    setTimeout(() => {
+      listRef.current?.scrollToIndex({ index: info.index, animated: true });
+    }, 50);
+  }, []);
+
   return (
     <View style={styles.container}>
-      <MapView style={styles.map} initialRegion={initialRegion}>
+      <MapView ref={mapRef} style={styles.map} initialRegion={initialRegion}>
         <CheckInMapPins
           checkIns={chronologicalCheckIns}
           selectedCheckInId={selectedCheckInId}
@@ -49,15 +70,6 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
           testIDPrefix="today-map"
         />
       </MapView>
-
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="지금 체크인"
-        onPress={onStartCheckIn}
-        style={styles.fab}
-      >
-        <Text style={styles.fabText}>＋</Text>
-      </Pressable>
 
       <BottomSheet ref={sheetRef} index={PEEK_INDEX} snapPoints={SNAP_POINTS} enableDynamicSizing={false}>
         <View style={styles.sheetHeader}>
@@ -74,6 +86,10 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
           )}
         </View>
 
+        {chronologicalCheckIns.length > 0 && (
+          <Text style={styles.mapCaption}>선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.</Text>
+        )}
+
         {chronologicalCheckIns.length === 0 ? (
           <View style={styles.emptyState}>
             <Text style={styles.emptyTitle}>오늘의 발자국이 아직 없어요.</Text>
@@ -85,16 +101,26 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
             data={chronologicalCheckIns}
             keyExtractor={(checkIn: CheckIn) => checkIn.id}
             contentContainerStyle={styles.list}
+            onScrollToIndexFailed={handleScrollToIndexFailed}
             renderItem={({ item }: { item: CheckIn }) => (
               <CheckInListRow
                 checkIn={item}
                 isSelected={item.id === selectedCheckInId}
-                onPress={setSelectedCheckInId}
+                onPress={selectFromRow}
               />
             )}
           />
         )}
       </BottomSheet>
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="지금 체크인"
+        onPress={onStartCheckIn}
+        style={styles.fab}
+      >
+        <Text style={styles.fabText}>＋</Text>
+      </Pressable>
     </View>
   );
 }
@@ -135,6 +161,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   settingsButtonText: { color: colors.primarySoftText, fontSize: 14, fontWeight: '700' },
+  mapCaption: { fontSize: 12, color: colors.textMuted, paddingHorizontal: 20, paddingBottom: 12 },
   emptyState: { paddingHorizontal: 20, paddingBottom: 24, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   emptyBody: { fontSize: 15, lineHeight: 22, color: colors.textSecondary },

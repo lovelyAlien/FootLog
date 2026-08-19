@@ -1,12 +1,19 @@
+const mockAnimateToRegion = jest.fn();
+
 jest.mock('react-native-maps', () => {
   const React = require('react');
   const { Pressable, View } = require('react-native');
 
+  const MapView = React.forwardRef(
+    ({ children, ...props }: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
+      React.useImperativeHandle(ref, () => ({ animateToRegion: mockAnimateToRegion }));
+      return <View testID="today-map" {...props}>{children}</View>;
+    },
+  );
+
   return {
     __esModule: true,
-    default: ({ children, ...props }: { children?: React.ReactNode }) => (
-      <View testID="today-map" {...props}>{children}</View>
-    ),
+    default: MapView,
     Marker: ({ onPress, testID, ...props }: { onPress?: () => void; testID?: string }) => (
       <Pressable testID={testID} onPress={onPress} {...props} />
     ),
@@ -16,7 +23,9 @@ jest.mock('react-native-maps', () => {
 
 const mockSnapToIndex = jest.fn();
 const mockScrollToIndex = jest.fn();
+const mockScrollToOffset = jest.fn();
 const mockBottomSheetProps = jest.fn();
+let capturedOnScrollToIndexFailed: ((info: { index: number; averageItemLength: number }) => void) | undefined;
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
@@ -31,8 +40,12 @@ jest.mock('@gorhom/bottom-sheet', () => {
   );
 
   const BottomSheetFlatList = React.forwardRef(
-    (props: React.ComponentProps<typeof FlatList>, ref: React.Ref<unknown>) => {
-      React.useImperativeHandle(ref, () => ({ scrollToIndex: mockScrollToIndex }));
+    (props: React.ComponentProps<typeof FlatList> & { onScrollToIndexFailed?: (info: { index: number; averageItemLength: number }) => void }, ref: React.Ref<unknown>) => {
+      capturedOnScrollToIndexFailed = props.onScrollToIndexFailed;
+      React.useImperativeHandle(ref, () => ({
+        scrollToIndex: mockScrollToIndex,
+        scrollToOffset: mockScrollToOffset,
+      }));
       return <FlatList {...props} />;
     },
   );
@@ -40,7 +53,7 @@ jest.mock('@gorhom/bottom-sheet', () => {
   return { __esModule: true, default: BottomSheet, BottomSheetFlatList };
 });
 
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { TodayMapSheet } from '../src/features/check-in/TodayMapSheet';
 import type { CheckIn } from '../src/features/check-in/domain';
@@ -63,7 +76,10 @@ describe('TodayMapSheet', () => {
   beforeEach(() => {
     mockSnapToIndex.mockClear();
     mockScrollToIndex.mockClear();
+    mockScrollToOffset.mockClear();
     mockBottomSheetProps.mockClear();
+    mockAnimateToRegion.mockClear();
+    capturedOnScrollToIndexFailed = undefined;
   });
 
   it('disables dynamic sizing so the sheet respects its fixed snapPoints', async () => {
@@ -152,5 +168,54 @@ describe('TodayMapSheet', () => {
 
     await fireEvent.press(view.getByRole('button', { name: '알림 설정' }));
     expect(onOpenReminderSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it('recovers from a failed scrollToIndex by falling back to scrollToOffset then retrying', async () => {
+    jest.useFakeTimers();
+    const first = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-06T00:15:00.000Z' });
+    const second = buildCheckIn({ id: 'c2', checkedInAt: '2026-08-06T08:45:00.000Z' });
+    await render(
+      <TodayMapSheet checkIns={[first, second]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+
+    expect(capturedOnScrollToIndexFailed).toBeDefined();
+    capturedOnScrollToIndexFailed?.({ index: 12, averageItemLength: 80 });
+
+    expect(mockScrollToOffset).toHaveBeenCalledWith({ offset: 960, animated: false });
+    expect(mockScrollToIndex).not.toHaveBeenCalledWith({ index: 12, animated: true });
+
+    await act(() => { jest.advanceTimersByTime(50); });
+
+    expect(mockScrollToIndex).toHaveBeenCalledWith({ index: 12, animated: true });
+
+    jest.useRealTimers();
+  });
+
+  it('recenters the map when a list row is tapped', async () => {
+    const first = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-06T00:15:00.000Z', latitude: 37.1, longitude: 127.1 });
+    const second = buildCheckIn({ id: 'c2', checkedInAt: '2026-08-06T08:45:00.000Z', latitude: 37.2, longitude: 127.2 });
+    const view = await render(
+      <TodayMapSheet checkIns={[first, second]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+
+    await fireEvent.press(view.getByTestId('today-map-list-c2'));
+
+    expect(mockAnimateToRegion).toHaveBeenCalledWith(
+      { latitude: 37.2, longitude: 127.2, latitudeDelta: 0.02, longitudeDelta: 0.02 },
+      300,
+    );
+  });
+
+  it('shows the not-a-real-route caption only when there are check-ins to connect', async () => {
+    const emptyView = await render(
+      <TodayMapSheet checkIns={[]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+    expect(emptyView.queryByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.')).toBeNull();
+
+    const checkIn = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-06T00:15:00.000Z' });
+    const filledView = await render(
+      <TodayMapSheet checkIns={[checkIn]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+    expect(filledView.getByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.')).toBeTruthy();
   });
 });
