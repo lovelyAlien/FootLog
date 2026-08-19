@@ -142,7 +142,16 @@ export default function RootLayout() {
           <DailyReflectionProvider value={state.dailyReflection}>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="check-in" options={{ title: '' }} />
+              <Stack.Screen
+                name="check-in"
+                options={{
+                  title: '',
+                  // Without an explicit back title, iOS falls back to the previous route's
+                  // raw name ("(tabs)") as the back button label. 'minimal' shows just the
+                  // chevron, matching standard iOS 14+ back button style.
+                  headerBackButtonDisplayMode: 'minimal',
+                }}
+              />
               <Stack.Screen name="day/[date]" options={{ title: '일일 회고' }} />
               <Stack.Screen
                 name="settings/reminders"
