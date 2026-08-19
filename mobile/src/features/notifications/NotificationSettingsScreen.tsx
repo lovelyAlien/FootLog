@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { colors } from '../../shared/theme';
 import type {
   NotificationSettings,
   NotificationSettingsRepository,
@@ -237,24 +238,24 @@ function HourSelector({ label, selectedHour, disabled, onSelect }: HourSelectorP
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#ffffff' },
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: '#ffffff' },
+  safeArea: { flex: 1, backgroundColor: colors.background },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: colors.background },
   container: { padding: 24, gap: 24 },
   heading: { gap: 8 },
-  title: { fontSize: 30, fontWeight: '700', color: '#1b1b1b' },
-  body: { fontSize: 16, lineHeight: 24, color: '#515151' },
+  title: { fontSize: 30, fontWeight: '700', color: colors.textPrimary },
+  body: { fontSize: 16, lineHeight: 24, color: colors.textSecondary },
   settingRow: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   settingCopy: { flex: 1, gap: 4 },
-  settingTitle: { fontSize: 17, fontWeight: '700', color: '#1b1b1b' },
+  settingTitle: { fontSize: 17, fontWeight: '700', color: colors.textPrimary },
   selector: { gap: 12 },
   hourOptions: { flexDirection: 'row', gap: 8 },
-  hourOption: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
-  selectedHourOption: { backgroundColor: '#2e6af0', borderColor: '#2e6af0' },
-  hourOptionText: { color: '#374151', fontSize: 15, fontWeight: '600' },
-  selectedHourOptionText: { color: '#ffffff' },
-  error: { color: '#b42318', fontSize: 15, lineHeight: 22 },
-  message: { color: '#7c2d12', backgroundColor: '#fff7ed', borderRadius: 10, padding: 14, fontSize: 15, lineHeight: 22 },
-  saveButton: { alignItems: 'center', borderRadius: 12, backgroundColor: '#2e6af0', paddingVertical: 16 },
+  hourOption: { borderWidth: 1, borderColor: colors.optionBorder, borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10 },
+  selectedHourOption: { backgroundColor: colors.primary, borderColor: colors.primary },
+  hourOptionText: { color: colors.optionText, fontSize: 15, fontWeight: '600' },
+  selectedHourOptionText: { color: colors.onPrimary },
+  error: { color: colors.error, fontSize: 15, lineHeight: 22 },
+  message: { color: colors.noticeText, backgroundColor: colors.noticeBackground, borderRadius: 10, padding: 14, fontSize: 15, lineHeight: 22 },
+  saveButton: { alignItems: 'center', borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 16 },
   disabledButton: { opacity: 0.4 },
-  saveButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  saveButtonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
 });

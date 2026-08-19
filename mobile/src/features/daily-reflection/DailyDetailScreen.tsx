@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 
+import { colors } from '../../shared/theme';
 import type { CheckIn } from '../check-in/domain';
 import { computeDailySummary } from './dailySummary';
 import { useDailyDetail } from './useDailyDetail';
@@ -153,7 +154,7 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
                   key={checkIn.id}
                   testID={`daily-detail-pin-${checkIn.id}`}
                   coordinate={{ latitude: checkIn.latitude, longitude: checkIn.longitude }}
-                  pinColor={checkIn.id === selectedCheckInId ? '#2e6af0' : undefined}
+                  pinColor={checkIn.id === selectedCheckInId ? colors.primary : undefined}
                   onPress={() => setSelectedCheckInId(checkIn.id)}
                 />
               ))}
@@ -218,30 +219,30 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1, paddingBottom: 24 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  message: { fontSize: 16, color: '#515151', textAlign: 'center' },
-  retryButton: { borderRadius: 12, backgroundColor: '#2e6af0', paddingHorizontal: 20, paddingVertical: 14 },
-  retryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  message: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
+  retryButton: { borderRadius: 12, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 14 },
+  retryButtonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
   header: { padding: 16, gap: 4 },
-  title: { fontSize: 22, fontWeight: '700', color: '#1b1b1b' },
-  subtitle: { fontSize: 14, color: '#8a8a8a' },
+  title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 14, color: colors.textMuted },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  emptyText: { fontSize: 16, color: '#515151' },
+  emptyText: { fontSize: 16, color: colors.textSecondary },
   map: { height: 260, marginHorizontal: 16, borderRadius: 16 },
-  mapCaption: { fontSize: 12, color: '#8a8a8a', marginHorizontal: 16, marginTop: 6 },
+  mapCaption: { fontSize: 12, color: colors.textMuted, marginHorizontal: 16, marginTop: 6 },
   summary: { padding: 16, gap: 6 },
-  summaryText: { fontSize: 14, color: '#1b1b1b' },
+  summaryText: { fontSize: 14, color: colors.textPrimary },
   timeline: { flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: 12, gap: 8 },
   timelineSlot: { width: 64, paddingVertical: 8, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
-  timelineSlotFilled: { backgroundColor: '#eef2ff' },
-  timelineSlotSelected: { borderColor: '#2e6af0' },
-  timelineHour: { fontSize: 12, color: '#1b1b1b' },
+  timelineSlotFilled: { backgroundColor: colors.primarySoftBackground },
+  timelineSlotSelected: { borderColor: colors.primary },
+  timelineHour: { fontSize: 12, color: colors.textPrimary },
   reflection: { padding: 16, gap: 8 },
-  reflectionLabel: { fontSize: 16, fontWeight: '700', color: '#1b1b1b' },
-  reflectionInput: { minHeight: 96, borderRadius: 12, borderWidth: 1, borderColor: '#e5e7eb', padding: 12, fontSize: 15, color: '#1b1b1b', textAlignVertical: 'top' },
-  completeButton: { alignSelf: 'flex-start', borderRadius: 10, backgroundColor: '#2e6af0', paddingHorizontal: 16, paddingVertical: 10 },
-  completeButtonText: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
-  errorText: { fontSize: 13, color: '#c0392b' },
+  reflectionLabel: { fontSize: 16, fontWeight: '700', color: colors.textPrimary },
+  reflectionInput: { minHeight: 96, borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 12, fontSize: 15, color: colors.textPrimary, textAlignVertical: 'top' },
+  completeButton: { alignSelf: 'flex-start', borderRadius: 10, backgroundColor: colors.primary, paddingHorizontal: 16, paddingVertical: 10 },
+  completeButtonText: { color: colors.onPrimary, fontSize: 14, fontWeight: '700' },
+  errorText: { fontSize: 13, color: colors.error },
 });

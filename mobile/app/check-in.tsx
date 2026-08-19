@@ -18,6 +18,7 @@ export default function CheckInRoute() {
         now: () => new Date().toISOString(),
       }}
       onViewToday={() => router.replace({ pathname: '/day/[date]', params: { date: localDateAndTimezone().localDate } })}
+      onCancel={() => router.back()}
     />
   );
 }

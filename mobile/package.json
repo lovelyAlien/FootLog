@@ -5,6 +5,7 @@
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
     "@expo/ui": "~57.0.9",
+    "@expo/vector-icons": "^15.1.1",
     "expo": "~57.0.11",
     "expo-constants": "~57.0.9",
     "expo-crypto": "~57.0.1",

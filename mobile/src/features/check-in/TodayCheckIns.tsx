@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { colors } from '../../shared/theme';
 import type { CheckIn } from './domain';
 
 type TodayCheckInsProps = {
@@ -69,26 +70,32 @@ export function TodayCheckIns({ checkIns, onStartCheckIn, onOpenReminderSettings
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, gap: 24, backgroundColor: '#ffffff' },
+  container: { flex: 1, padding: 24, gap: 24, backgroundColor: colors.background },
   heading: { gap: 6 },
   headingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  title: { fontSize: 32, fontWeight: '700', color: '#1b1b1b' },
-  subtitle: { fontSize: 16, color: '#515151' },
-  settingsButton: { borderRadius: 10, backgroundColor: '#eef2ff', paddingHorizontal: 12, paddingVertical: 9 },
-  settingsButtonText: { color: '#2948a8', fontSize: 14, fontWeight: '700' },
+  title: { fontSize: 32, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 16, color: colors.textSecondary },
+  settingsButton: {
+    borderRadius: 10,
+    backgroundColor: colors.primarySoftBackground,
+    paddingHorizontal: 12,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  settingsButtonText: { color: colors.primarySoftText, fontSize: 14, fontWeight: '700' },
   emptyState: { flex: 1, justifyContent: 'center', gap: 8 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: '#1b1b1b' },
-  emptyBody: { fontSize: 16, lineHeight: 24, color: '#515151' },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  emptyBody: { fontSize: 16, lineHeight: 24, color: colors.textSecondary },
   list: { flex: 1, gap: 12 },
   checkIn: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: colors.border,
     padding: 18,
     gap: 6,
   },
-  time: { fontSize: 20, fontWeight: '700', color: '#1b1b1b' },
-  accuracy: { fontSize: 15, color: '#515151' },
-  primaryButton: { alignItems: 'center', borderRadius: 12, backgroundColor: '#2e6af0', paddingVertical: 16 },
-  primaryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  time: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  accuracy: { fontSize: 15, color: colors.textSecondary },
+  primaryButton: { alignItems: 'center', borderRadius: 12, backgroundColor: colors.primary, paddingVertical: 16 },
+  primaryButtonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
 });

@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFootLogRepository } from '../../src/database/FootLogContext';
 import { localDateAndTimezone } from '../../src/shared/localDate';
+import { colors } from '../../src/shared/theme';
 import { TodayCheckIns } from '../../src/features/check-in/TodayCheckIns';
 import type { CheckIn } from '../../src/features/check-in/domain';
 
@@ -55,7 +56,7 @@ export default function TodayRoute() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  message: { fontSize: 16, color: '#515151', textAlign: 'center' },
+  message: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
 });

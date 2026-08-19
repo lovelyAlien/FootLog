@@ -24,6 +24,7 @@ import {
   startNotificationResponseRouting,
 } from '../src/features/notifications/notificationResponseRouting';
 import { AppSettingsRepository } from '../src/features/settings/AppSettingsRepository';
+import { colors } from '../src/shared/theme';
 
 configureForegroundNotificationPresentation(Notifications);
 
@@ -141,7 +142,7 @@ export default function RootLayout() {
         <DailyReflectionProvider value={state.dailyReflection}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="check-in" options={{ title: '체크인' }} />
+            <Stack.Screen name="check-in" options={{ title: '' }} />
             <Stack.Screen name="day/[date]" options={{ title: '일일 회고' }} />
             <Stack.Screen name="settings/reminders" options={{ title: '체크인 알림' }} />
           </Stack>
@@ -161,9 +162,9 @@ function LoadingState() {
 }
 
 const styles = StyleSheet.create({
-  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#ffffff' },
-  title: { fontSize: 22, fontWeight: '700', color: '#1b1b1b', textAlign: 'center' },
-  body: { fontSize: 16, color: '#515151', textAlign: 'center' },
-  retryButton: { marginTop: 12, borderRadius: 12, backgroundColor: '#2e6af0', paddingHorizontal: 20, paddingVertical: 14 },
-  retryButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '700' },
+  centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.background },
+  title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
+  body: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
+  retryButton: { marginTop: 12, borderRadius: 12, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 14 },
+  retryButtonText: { color: colors.onPrimary, fontSize: 16, fontWeight: '700' },
 });

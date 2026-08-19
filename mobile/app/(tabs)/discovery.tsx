@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { colors } from '../../src/shared/theme';
+
 export default function DiscoveryRoute() {
   return (
     <SafeAreaView style={styles.container}>
@@ -13,8 +15,8 @@ export default function DiscoveryRoute() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff' },
+  container: { flex: 1, backgroundColor: colors.background },
   content: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
-  title: { fontSize: 32, fontWeight: '700', color: '#1b1b1b' },
-  body: { fontSize: 16, lineHeight: 24, color: '#515151' },
+  title: { fontSize: 32, fontWeight: '700', color: colors.textPrimary },
+  body: { fontSize: 16, lineHeight: 24, color: colors.textSecondary },
 });

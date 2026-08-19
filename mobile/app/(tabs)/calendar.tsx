@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFootLogRepository } from '../../src/database/FootLogContext';
 import { localDateAndTimezone } from '../../src/shared/localDate';
+import { colors } from '../../src/shared/theme';
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -96,14 +97,14 @@ export default function CalendarRoute() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#ffffff', padding: 16, gap: 16 },
+  container: { flex: 1, backgroundColor: colors.background, padding: 16, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  navText: { fontSize: 24, color: '#2e6af0', paddingHorizontal: 12 },
-  title: { fontSize: 20, fontWeight: '700', color: '#1b1b1b' },
+  navText: { fontSize: 24, color: colors.primary, paddingHorizontal: 12 },
+  title: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
   weekdayRow: { flexDirection: 'row' },
-  weekdayLabel: { flex: 1, textAlign: 'center', fontSize: 13, color: '#8a8a8a' },
+  weekdayLabel: { flex: 1, textAlign: 'center', fontSize: 13, color: colors.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { width: `${100 / 7}%`, aspectRatio: 1, alignItems: 'center', justifyContent: 'center', gap: 4 },
-  dayText: { fontSize: 15, color: '#1b1b1b' },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2e6af0' },
+  dayText: { fontSize: 15, color: colors.textPrimary },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.primary },
 });
