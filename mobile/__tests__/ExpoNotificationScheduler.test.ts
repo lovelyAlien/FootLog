@@ -200,6 +200,26 @@ describe('ExpoNotificationScheduler', () => {
     });
   });
 
+  it('persists the newly requested interval, not the stored one, when permission is denied', async () => {
+    mockGetPermissionsAsync.mockResolvedValue({
+      status: 'denied', granted: false, canAskAgain: true, expires: 'never',
+    });
+    const repository = createRepository({
+      enabled: true, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: ['footlog-old'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 3)).resolves.toEqual({ status: 'denied' });
+
+    expect(repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 10,
+      intervalHours: 3,
+      scheduledIds: [],
+    });
+  });
+
   it('returns denied and leaves reminders disabled without scheduling', async () => {
     mockRequestPermissionsAsync.mockResolvedValue({
       status: 'denied', granted: false, canAskAgain: false, expires: 'never',
@@ -348,6 +368,25 @@ describe('ExpoNotificationScheduler', () => {
       startHour: 9,
       endHour: 10,
       intervalHours: 1,
+      scheduledIds: [],
+    });
+  });
+
+  it('persists the newly requested interval, not the stored one, when rebuilding fails', async () => {
+    const schedulingError = new Error('schedule failed');
+    mockScheduleNotificationAsync.mockReset().mockRejectedValueOnce(schedulingError);
+    const repository = createRepository({
+      enabled: true, startHour: 7, endHour: 23, intervalHours: 1, scheduledIds: ['old-footlog-id'],
+    });
+    const scheduler = new ExpoNotificationScheduler(repository, () => new Date('2026-08-06T08:32:00+09:00'));
+
+    await expect(scheduler.reschedule({ startHour: 9, endHour: 10 }, 3)).rejects.toBe(schedulingError);
+
+    expect(repository.setNotificationSettings).toHaveBeenCalledWith({
+      enabled: false,
+      startHour: 9,
+      endHour: 10,
+      intervalHours: 3,
       scheduledIds: [],
     });
   });
