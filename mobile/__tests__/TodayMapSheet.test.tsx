@@ -206,15 +206,25 @@ describe('TodayMapSheet', () => {
     );
   });
 
-  it('shows the not-a-real-route caption only when there are check-ins to connect', async () => {
+  it('shows the not-a-real-route caption only when there are at least two check-ins to connect with a line', async () => {
     const emptyView = await render(
       <TodayMapSheet checkIns={[]} initialRegion={region} onStartCheckIn={jest.fn()} />,
     );
     expect(emptyView.queryByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.')).toBeNull();
 
-    const checkIn = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-06T00:15:00.000Z' });
+    const single = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-06T00:15:00.000Z' });
+    const singleView = await render(
+      <TodayMapSheet checkIns={[single]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+    // With exactly one check-in, CheckInMapPins doesn't draw a Polyline (needs >= 2 points),
+    // so the caption about "the line" must not show either — otherwise it references a line
+    // that isn't on the map.
+    expect(singleView.queryByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.')).toBeNull();
+
+    const first = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-06T00:15:00.000Z' });
+    const second = buildCheckIn({ id: 'c2', checkedInAt: '2026-08-06T08:45:00.000Z' });
     const filledView = await render(
-      <TodayMapSheet checkIns={[checkIn]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+      <TodayMapSheet checkIns={[first, second]} initialRegion={region} onStartCheckIn={jest.fn()} />,
     );
     expect(filledView.getByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.')).toBeTruthy();
   });

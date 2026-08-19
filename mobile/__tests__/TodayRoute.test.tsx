@@ -232,6 +232,24 @@ describe('TodayRoute', () => {
     jest.useRealTimers();
   });
 
+  it('keeps showing the already-loaded map and check-ins when a subsequent refresh fails, instead of the error screen', async () => {
+    mockRepository.listByLocalDay = jest.fn()
+      .mockResolvedValueOnce([firstCheckIn])
+      .mockRejectedValueOnce(new Error('transient refresh failure'));
+
+    const view = await render(<TodayRoute />);
+    await act(async () => { mockFocusEffect?.(); });
+    await waitFor(() => expect(view.getByTestId('today-map')).toBeTruthy());
+    expect(view.getByTestId('today-map-list-first')).toBeTruthy();
+
+    await act(async () => { mockFocusEffect?.(); });
+
+    await waitFor(() => expect(mockRepository.listByLocalDay).toHaveBeenCalledTimes(2));
+    expect(view.queryByText('오늘의 발자국을 불러오지 못했어요.')).toBeNull();
+    expect(view.getByTestId('today-map')).toBeTruthy();
+    expect(view.getByTestId('today-map-list-first')).toBeTruthy();
+  });
+
   it('does not show the blocking loading screen (or remount the map) on a subsequent focus refresh', async () => {
     let resolveSecondLoad: (value: CheckIn[]) => void = () => {};
     mockRepository.listByLocalDay = jest.fn()

@@ -67,7 +67,10 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
   }, [chronologicalCheckIns]);
 
   const handleScrollToIndexFailed = useCallback((info: { index: number; averageItemLength: number }) => {
-    listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
+    // Guard against a 0 averageItemLength (e.g. before any item has laid out), which would
+    // otherwise compute an offset of 0 and make the retry fail identically forever.
+    const offset = Math.max(info.averageItemLength, 1) * info.index;
+    listRef.current?.scrollToOffset({ offset, animated: false });
     setTimeout(() => {
       listRef.current?.scrollToIndex({ index: info.index, animated: true });
     }, 50);
@@ -99,7 +102,7 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
           )}
         </View>
 
-        {chronologicalCheckIns.length > 0 && (
+        {chronologicalCheckIns.length >= 2 && (
           <Text style={styles.mapCaption}>선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.</Text>
         )}
 

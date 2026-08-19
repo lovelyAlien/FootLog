@@ -59,7 +59,9 @@ export default function TodayRoute() {
           hasLoadedOnceRef.current = true;
         })
         .catch(() => {
-          if (isCurrent) setHasError(true);
+          // Once we've shown real data once, treat a refresh failure as transient and keep
+          // showing the last-good check-ins/map instead of replacing them with an error screen.
+          if (isCurrent && !hasLoadedOnceRef.current) setHasError(true);
         })
         .finally(() => {
           if (isCurrent) setIsLoading(false);
