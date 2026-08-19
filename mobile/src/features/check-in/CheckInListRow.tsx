@@ -1,0 +1,36 @@
+import { Pressable, StyleSheet, Text } from 'react-native';
+
+import { colors } from '../../shared/theme';
+import type { CheckIn } from './domain';
+
+type CheckInListRowProps = {
+  checkIn: CheckIn;
+  isSelected: boolean;
+  onPress: (id: string) => void;
+};
+
+function formatLocalTime(checkedInAt: string): string {
+  return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(checkedInAt));
+}
+
+export function CheckInListRow({ checkIn, isSelected, onPress }: CheckInListRowProps) {
+  return (
+    <Pressable
+      testID={`today-map-list-${checkIn.id}`}
+      accessibilityRole="button"
+      accessibilityLabel={`${formatLocalTime(checkIn.checkedInAt)} 체크인`}
+      onPress={() => onPress(checkIn.id)}
+      style={[styles.row, isSelected && styles.rowSelected]}
+    >
+      <Text testID="check-in-time" style={styles.time}>{formatLocalTime(checkIn.checkedInAt)}</Text>
+      <Text style={styles.accuracy}>정확도 약 {Math.round(checkIn.accuracyM)}m</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  row: { borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 4 },
+  rowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoftBackground },
+  time: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  accuracy: { fontSize: 14, color: colors.textSecondary },
+});

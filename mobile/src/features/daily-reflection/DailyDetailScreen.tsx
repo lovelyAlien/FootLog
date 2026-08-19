@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView from 'react-native-maps';
 
 import { colors } from '../../shared/theme';
+import { CheckInMapPins } from '../check-in/CheckInMapPins';
 import type { CheckIn } from '../check-in/domain';
 import { computeDailySummary } from './dailySummary';
 import { useDailyDetail } from './useDailyDetail';
@@ -149,16 +150,12 @@ export function DailyDetailScreen({ localDate }: DailyDetailScreenProps) {
                 longitudeDelta: 0.02,
               }}
             >
-              {sortedCheckIns.map((checkIn) => (
-                <Marker
-                  key={checkIn.id}
-                  testID={`daily-detail-pin-${checkIn.id}`}
-                  coordinate={{ latitude: checkIn.latitude, longitude: checkIn.longitude }}
-                  pinColor={checkIn.id === selectedCheckInId ? colors.primary : undefined}
-                  onPress={() => setSelectedCheckInId(checkIn.id)}
-                />
-              ))}
-              <Polyline coordinates={sortedCheckIns.map((checkIn) => ({ latitude: checkIn.latitude, longitude: checkIn.longitude }))} />
+              <CheckInMapPins
+                checkIns={sortedCheckIns}
+                selectedCheckInId={selectedCheckInId}
+                onSelectCheckIn={setSelectedCheckInId}
+                testIDPrefix="daily-detail"
+              />
             </MapView>
             <Text style={styles.mapCaption}>선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.</Text>
 

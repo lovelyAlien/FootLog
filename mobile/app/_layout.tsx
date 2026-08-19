@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Stack, useRootNavigationState, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Pressable, StyleSheet, Text, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { FootLogRepositoryProvider } from '../src/database/FootLogContext';
 import { openFootLogDatabase } from '../src/database/openDatabase';
@@ -112,12 +113,12 @@ export default function RootLayout() {
     return () => subscription.remove();
   }, [state]);
 
-  if (state.status === 'loading') {
-    return <LoadingState />;
-  }
+  let content: React.ReactNode;
 
-  if (state.status === 'error') {
-    return (
+  if (state.status === 'loading') {
+    content = <LoadingState />;
+  } else if (state.status === 'error') {
+    content = (
       <View style={styles.centered}>
         <Text style={styles.title}>FootLog을 준비하지 못했어요.</Text>
         <Text style={styles.body}>로컬 저장소를 다시 열어 볼게요.</Text>
@@ -134,32 +135,38 @@ export default function RootLayout() {
         </Pressable>
       </View>
     );
+  } else {
+    content = (
+      <FootLogRepositoryProvider value={state.repository}>
+        <NotificationSettingsProvider value={state.notificationSettings}>
+          <DailyReflectionProvider value={state.dailyReflection}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="check-in" options={{ title: '' }} />
+              <Stack.Screen name="day/[date]" options={{ title: '일일 회고' }} />
+              <Stack.Screen
+                name="settings/reminders"
+                options={{
+                  title: '체크인 알림',
+                  // The activity-window slider's left handle sits close to the screen edge for
+                  // early start hours (e.g. the 07:00 "출근형" preset), where iOS's edge
+                  // swipe-to-go-back gesture intercepts the drag before the slider's own
+                  // PanResponder sees it. The header already provides an explicit back button,
+                  // so disabling the swipe here loses no way to navigate back.
+                  gestureEnabled: false,
+                }}
+              />
+            </Stack>
+          </DailyReflectionProvider>
+        </NotificationSettingsProvider>
+      </FootLogRepositoryProvider>
+    );
   }
 
   return (
-    <FootLogRepositoryProvider value={state.repository}>
-      <NotificationSettingsProvider value={state.notificationSettings}>
-        <DailyReflectionProvider value={state.dailyReflection}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="check-in" options={{ title: '' }} />
-            <Stack.Screen name="day/[date]" options={{ title: '일일 회고' }} />
-            <Stack.Screen
-              name="settings/reminders"
-              options={{
-                title: '체크인 알림',
-                // The activity-window slider's left handle sits close to the screen edge for
-                // early start hours (e.g. the 07:00 "출근형" preset), where iOS's edge
-                // swipe-to-go-back gesture intercepts the drag before the slider's own
-                // PanResponder sees it. The header already provides an explicit back button,
-                // so disabling the swipe here loses no way to navigate back.
-                gestureEnabled: false,
-              }}
-            />
-          </Stack>
-        </DailyReflectionProvider>
-      </NotificationSettingsProvider>
-    </FootLogRepositoryProvider>
+    <GestureHandlerRootView style={styles.root}>
+      {content}
+    </GestureHandlerRootView>
   );
 }
 
@@ -173,6 +180,7 @@ function LoadingState() {
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12, backgroundColor: colors.background },
   title: { fontSize: 22, fontWeight: '700', color: colors.textPrimary, textAlign: 'center' },
   body: { fontSize: 16, color: colors.textSecondary, textAlign: 'center' },
