@@ -17,11 +17,20 @@ jest.mock('react-native-maps', () => {
   const React = require('react');
   const { View } = require('react-native');
 
+  // TodayMapSheet imperatively calls `mapRef.current?.animateToRegion(...)` once its
+  // initialRegion prop changes after mount (this file only verifies TodayRoute passes the
+  // right prop down — see the dedicated animateToRegion test in TodayMapSheet.test.tsx), so
+  // this mock needs a ref target with that method or the call throws.
+  const MapView = React.forwardRef(
+    ({ children, ...props }: { children?: React.ReactNode }, ref: React.Ref<unknown>) => {
+      React.useImperativeHandle(ref, () => ({ animateToRegion: jest.fn() }));
+      return <View testID="today-map" {...props}>{children}</View>;
+    },
+  );
+
   return {
     __esModule: true,
-    default: ({ children, ...props }: { children?: React.ReactNode }) => (
-      <View testID="today-map" {...props}>{children}</View>
-    ),
+    default: MapView,
     Marker: (props: object) => <View testID="today-map-pin" {...props} />,
     Polyline: (props: object) => <View testID="today-map-polyline" {...props} />,
   };
@@ -177,7 +186,14 @@ describe('TodayRoute', () => {
     });
   });
 
-  it('refines the initial region once a slower location fix resolves after check-ins are already shown', async () => {
+  it('passes the refined initial region down as a prop once a slower location fix resolves after check-ins are already shown', async () => {
+    // Scope note: TodayRoute's job ends at computing and passing the right `initialRegion`
+    // prop down to TodayMapSheet — which is exactly what this test verifies via the mocked
+    // MapView it plumbs through to. Turning a changed `initialRegion` prop into an actual
+    // imperative recenter (via animateToRegion) is TodayMapSheet's responsibility and is
+    // covered by its own dedicated, accurate test in TodayMapSheet.test.tsx (that mock models
+    // react-native-maps' real "initialRegion is mount-only" contract; this file's plain-View
+    // mock does not, so it can't itself certify that recentering happens on screen).
     let resolveFix: (value: unknown) => void = () => {};
     mockGetCurrentFix = jest.fn(() => new Promise((resolve) => { resolveFix = resolve; }));
 

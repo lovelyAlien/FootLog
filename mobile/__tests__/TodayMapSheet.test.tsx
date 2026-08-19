@@ -218,4 +218,23 @@ describe('TodayMapSheet', () => {
     );
     expect(filledView.getByText('선은 실제 이동 경로가 아니라 기록 지점을 시간순으로 연결한 선이에요.')).toBeTruthy();
   });
+
+  it('does not recenter the map on first mount, but does animate to a refined initialRegion once it changes', async () => {
+    const view = await render(
+      <TodayMapSheet checkIns={[]} initialRegion={region} onStartCheckIn={jest.fn()} />,
+    );
+
+    // MapView's own `initialRegion` prop already covers the mount case — recentering
+    // imperatively here too would be redundant and would reproduce the mount-time animation
+    // bug this test guards against.
+    expect(mockAnimateToRegion).not.toHaveBeenCalled();
+
+    const refinedRegion = { latitude: 37.1, longitude: 127.1, latitudeDelta: 0.02, longitudeDelta: 0.02 };
+    await view.rerender(
+      <TodayMapSheet checkIns={[]} initialRegion={refinedRegion} onStartCheckIn={jest.fn()} />,
+    );
+
+    expect(mockAnimateToRegion).toHaveBeenCalledTimes(1);
+    expect(mockAnimateToRegion).toHaveBeenCalledWith(refinedRegion, 300);
+  });
 });

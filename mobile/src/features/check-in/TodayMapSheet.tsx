@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ElementRef } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView from 'react-native-maps';
@@ -30,6 +30,19 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
   const sheetRef = useRef<ElementRef<typeof BottomSheet>>(null);
   const listRef = useRef<BottomSheetFlatListMethods>(null);
   const mapRef = useRef<ElementRef<typeof MapView>>(null);
+  const hasMountedRef = useRef(false);
+
+  // `initialRegion` is only honored by react-native-maps on first mount — changing the prop
+  // afterward is a silent no-op (see MapView.d.ts). TodayMapSheet stays mounted across
+  // refocuses now, so a later, more accurate location fix needs an imperative nudge instead.
+  // Skip the very first run: the MapView's own `initialRegion` prop already covers the mount.
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    mapRef.current?.animateToRegion(initialRegion, 300);
+  }, [initialRegion]);
 
   const selectFromPin = useCallback((id: string) => {
     setSelectedCheckInId(id);
