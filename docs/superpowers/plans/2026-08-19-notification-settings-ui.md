@@ -1617,6 +1617,8 @@ git commit -m "feat(notifications): 듀얼 핸들 활동 시간대 슬라이더 
 - Consumes: `ActivityWindowSlider`(Task 7), `ACTIVITY_WINDOW_PRESETS`/`matchPreset`(Task 5), `countScheduledNotificationsPerDay`(Task 2), `formatHour`(Task 6), `NotificationScheduler.reschedule(window, intervalHours)`(Task 3)
 - 이 태스크에서 저장 버튼·시간 유효성 에러 문구를 제거하고, 모든 조작이 즉시 반영되도록 전면 재작성한다.
 
+**중요 — Task 7 설계에서 이어지는 클로저 함정:** `ActivityWindowSlider`(Task 7)는 내부 `PanResponder`를 `useState(() => createResponder(handle))`로 한 번만 생성한다. 이 때문에 그 컴포넌트가 마운트된 시점에 넘겨받은 `onChangeEnd` 참조가 이후 리렌더와 무관하게 영원히 고정된다. 만약 `<ActivityWindowSlider onChangeEnd={(window) => { void applyChange(window, intervalHours); }} />`처럼 매 렌더마다 새로 만들어지는 인라인 함수를 넘기면, 그 함수가 클로저로 캡처한 `intervalHours`(그리고 `applyChange`가 캡처한 `enabled`)는 슬라이더가 마운트된 시점 값에 영원히 고정된다. 즉 사용자가 알림 간격을 바꾸거나 스위치를 켠 뒤 슬라이더를 드래그하면, 그 변경 이후에도 계속 마운트 시점의 예전 `intervalHours`/`enabled`로 `reschedule`이 호출되는 실제 버그가 된다. 아래 Step 3 코드는 이를 피하기 위해 `applyChangeRef`/`intervalHoursRef`를 두어, 슬라이더에 넘기는 콜백이 항상 최신 값을 참조하도록 한다 — 이 부분은 원래 계획 초안에 없던 대응이니 반드시 아래 코드 그대로 반영한다.
+
 - [ ] **Step 1: 실패하는 테스트 작성**
 
 `mobile/__tests__/NotificationSettingsScreen.test.tsx`를 다음으로 전체 교체한다.
@@ -1727,6 +1729,25 @@ describe('NotificationSettingsScreen', () => {
     });
 
     expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 1);
+  });
+
+  it('uses the latest interval when the slider changes after an interval switch', async () => {
+    // Regression test: ActivityWindowSlider (Task 7) freezes its onChangeEnd closure at
+    // mount via useState(() => createResponder(...)). If the callback passed from here
+    // captured `intervalHours` directly, dragging the slider after switching intervals
+    // would silently reschedule with the stale mount-time interval.
+    const dependencies = createDependencies({ enabled: true });
+    const view = await render(<NotificationSettingsScreen {...dependencies} />);
+    await view.findByText('07:00 – 23:00');
+
+    await act(async () => { fireEvent.press(view.getByRole('button', { name: '2시간 간격' })); });
+    dependencies.scheduler.reschedule.mockClear();
+
+    await act(async () => {
+      fireEvent(view.getByLabelText('시작 시간'), 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    });
+
+    expect(dependencies.scheduler.reschedule).toHaveBeenCalledWith({ startHour: 8, endHour: 23 }, 2);
   });
 
   it('persists a changed window while disabled without scheduling', async () => {
@@ -1909,6 +1930,19 @@ export function NotificationSettingsScreen({
     }
   };
 
+  // ActivityWindowSlider (Task 7) freezes its onChangeEnd reference at mount, so the
+  // callback handed to it below must never rely on values closed over by value — it
+  // reads through these refs (kept fresh every render) instead.
+  const applyChangeRef = useRef(applyChange);
+  applyChangeRef.current = applyChange;
+
+  const intervalHoursRef = useRef(intervalHours);
+  intervalHoursRef.current = intervalHours;
+
+  const handleSliderChange = useCallback((window: Window) => {
+    void applyChangeRef.current(window, intervalHoursRef.current);
+  }, []);
+
   const setReminderEnabled = async (nextEnabled: boolean) => {
     if (busyRef.current) return;
     busyRef.current = true;
@@ -1991,7 +2025,7 @@ export function NotificationSettingsScreen({
           startHour={startHour}
           endHour={endHour}
           disabled={isBusy}
-          onChangeEnd={(window) => { void applyChange(window, intervalHours); }}
+          onChangeEnd={handleSliderChange}
         />
 
         <View style={styles.intervalSection}>
