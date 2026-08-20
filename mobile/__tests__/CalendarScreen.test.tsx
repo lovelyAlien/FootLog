@@ -1,14 +1,26 @@
 const mockPush = jest.fn();
+// calendar.tsx calls useFocusEffect twice, always in the same textual order (dot lookup
+// first, preview fetch second) thanks to React's hook-call-order guarantee. This mock
+// captures each call site into its order-indexed slot so tests can manually re-invoke a
+// specific effect via mockFocusEffects[n]?.() to simulate a refocus, mirroring the pattern
+// in mobile/__tests__/TodayRoute.test.tsx (which only needs one slot since it has one call).
+const mockFocusEffects: ((() => void | (() => void)) | undefined)[] = [];
+let mockFocusEffectCursor = 0;
 let mockRepository: { listLocalDatesWithCheckIns: jest.Mock; listByLocalDay: jest.Mock };
 
 jest.mock('expo-router', () => {
   const { useEffect } = require('react');
   return {
     // calendar.tsx uses useFocusEffect so its effects re-run whenever the tab regains focus
-    // (see mobile/app/(tabs)/index.tsx for the same pattern). Unit tests never lose/regain
-    // focus, so mocking it as a plain mount/deps-driven useEffect reproduces the same
-    // observable behavior for these tests without needing to simulate navigation focus.
-    useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
+    // (see mobile/app/(tabs)/index.tsx for the same pattern). Capturing each effect into an
+    // order-indexed slot below lets tests manually re-invoke it to simulate a refocus, while
+    // still auto-running on mount/deps-change (via the useEffect passthrough) so the existing
+    // mount-time tests keep working unmodified.
+    useFocusEffect: (effect: () => void | (() => void)) => {
+      mockFocusEffects[mockFocusEffectCursor % 2] = effect;
+      mockFocusEffectCursor += 1;
+      useEffect(effect, [effect]);
+    },
     useRouter: () => ({ push: mockPush }),
   };
 });
@@ -17,7 +29,7 @@ jest.mock('../src/database/FootLogContext', () => ({
   useFootLogRepository: () => mockRepository,
 }));
 
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import CalendarRoute from '../app/(tabs)/calendar';
 import { localDateAndTimezone } from '../src/shared/localDate';
@@ -26,6 +38,8 @@ import { formatLocalTime } from '../src/shared/formatLocalTime';
 describe('CalendarRoute', () => {
   beforeEach(() => {
     mockPush.mockClear();
+    mockFocusEffectCursor = 0;
+    mockFocusEffects.length = 0;
   });
 
   it('shows a dot only for dates with check-ins', async () => {
@@ -168,7 +182,8 @@ describe('CalendarRoute', () => {
       listLocalDatesWithCheckIns: jest.fn().mockResolvedValue([]),
       listByLocalDay: jest.fn()
         .mockResolvedValueOnce([]) // the default today-selection fetch on mount succeeds
-        .mockRejectedValueOnce(new Error('db unavailable')), // the manual tap below fails
+        .mockRejectedValueOnce(new Error('db unavailable')) // the manual tap below fails
+        .mockResolvedValue([]), // harmless default for any incidental extra call
     };
 
     const view = await render(<CalendarRoute />);
@@ -197,5 +212,64 @@ describe('CalendarRoute', () => {
     await waitFor(() => expect(view.getByText(
       new RegExp(`${formatLocalTime(earlierIso)}, ${formatLocalTime(laterIso)}`),
     )).toBeTruthy());
+  });
+
+  it("reloads dots and the selected date's preview when the screen regains focus", async () => {
+    const { localDate: today } = localDateAndTimezone();
+    mockRepository = {
+      listLocalDatesWithCheckIns: jest.fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([today]),
+      listByLocalDay: jest.fn()
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            id: 'refocus-check-in',
+            checkedInAt: `${today}T05:00:00.000Z`,
+            latitude: 37.5, longitude: 127.0, accuracyM: 5,
+            createdAt: `${today}T05:00:00.000Z`, syncStatus: 'pending',
+          },
+        ]),
+    };
+
+    const view = await render(<CalendarRoute />);
+
+    await waitFor(() => expect(view.getByText('이날은 남겨진 발자국이 없어요.')).toBeTruthy());
+
+    await act(async () => {
+      mockFocusEffects[0]?.();
+      mockFocusEffects[1]?.();
+    });
+
+    await waitFor(() => expect(view.getByText(/체크인 1개/)).toBeTruthy());
+    expect(mockRepository.listLocalDatesWithCheckIns).toHaveBeenCalledTimes(2);
+    expect(mockRepository.listByLocalDay).toHaveBeenCalledTimes(2);
+  });
+
+  it('truncates the time list and shows the overflow count when there are more than 4 check-ins', async () => {
+    const { localDate: today } = localDateAndTimezone();
+    const isoTimes = [
+      `${today}T00:10:00.000Z`,
+      `${today}T02:20:00.000Z`,
+      `${today}T04:30:00.000Z`,
+      `${today}T06:40:00.000Z`,
+      `${today}T08:50:00.000Z`,
+    ];
+    mockRepository = {
+      listLocalDatesWithCheckIns: jest.fn().mockResolvedValue([today]),
+      listByLocalDay: jest.fn().mockResolvedValue(
+        isoTimes.map((iso, index) => ({
+          id: `check-in-${index}`,
+          checkedInAt: iso,
+          latitude: 37.5, longitude: 127.0, accuracyM: 5,
+          createdAt: iso, syncStatus: 'pending',
+        })),
+      ),
+    };
+
+    const view = await render(<CalendarRoute />);
+
+    await waitFor(() => expect(view.getByText(/체크인 5개/)).toBeTruthy());
+    expect(view.getByText(/외 1건/)).toBeTruthy();
   });
 });
