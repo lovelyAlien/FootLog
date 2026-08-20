@@ -1,13 +1,16 @@
-import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFootLogRepository } from '../../src/database/FootLogContext';
 import { localDateAndTimezone } from '../../src/shared/localDate';
 import { formatLocalTime } from '../../src/shared/formatLocalTime';
+import { byCheckedInAtAscending } from '../../src/shared/byCheckedInAtAscending';
 import { colors, fonts } from '../../src/shared/theme';
 import type { CheckIn } from '../../src/features/check-in/domain';
+
+const MAX_PREVIEW_TIMES = 4;
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -29,9 +32,9 @@ function formatPreviewDate(localDate: string): string {
 }
 
 type PreviewState =
-  | { status: 'loading' }
-  | { status: 'loaded'; checkIns: CheckIn[] }
-  | { status: 'error' };
+  | { date: string; status: 'loading' }
+  | { date: string; status: 'loaded'; checkIns: CheckIn[] }
+  | { date: string; status: 'error' };
 
 export default function CalendarRoute() {
   const router = useRouter();
@@ -48,7 +51,7 @@ export default function CalendarRoute() {
   // back to "no selection" (design doc §6) rather than show an error the user never asked
   // for; a failed fetch for a selection the user tapped should show the inline error.
   const [isDefaultSelection, setIsDefaultSelection] = useState(initialSelection !== null);
-  const [preview, setPreview] = useState<PreviewState>({ status: 'loading' });
+  const [preview, setPreview] = useState<PreviewState>({ date: initialSelection ?? '', status: 'loading' });
 
   const loadDots = useCallback(() => {
     void repository.listLocalDatesWithCheckIns(year, month, timezone)
@@ -56,25 +59,24 @@ export default function CalendarRoute() {
       .catch(() => setDatesWithCheckIns(new Set()));
   }, [repository, year, month, timezone]);
 
-  useEffect(() => { loadDots(); }, [loadDots]);
+  useFocusEffect(useCallback(() => { loadDots(); }, [loadDots]));
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     if (!selectedDate) return undefined;
+    const date = selectedDate;
     let isCurrent = true;
-    setPreview({ status: 'loading' });
-    void repository.listByLocalDay(selectedDate, timezone)
-      .then((checkIns) => { if (isCurrent) setPreview({ status: 'loaded', checkIns }); })
+    void repository.listByLocalDay(date, timezone)
+      .then((checkIns) => { if (isCurrent) setPreview({ date, status: 'loaded', checkIns }); })
       .catch(() => {
         if (!isCurrent) return;
         if (isDefaultSelection) {
           setSelectedDate(null);
         } else {
-          setPreview({ status: 'error' });
+          setPreview({ date, status: 'error' });
         }
       });
     return () => { isCurrent = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- isDefaultSelection is read, not a trigger: re-running this effect when it flips would refetch a date whose fetch is already in flight.
-  }, [selectedDate, repository, timezone]);
+  }, [selectedDate, repository, timezone, isDefaultSelection]));
 
   const selectDate = (date: string) => {
     setIsDefaultSelection(false);
@@ -156,16 +158,25 @@ export default function CalendarRoute() {
       {selectedDate && (
         <View style={styles.preview}>
           <Text style={styles.previewDate}>{formatPreviewDate(selectedDate)}</Text>
-          {preview.status === 'loading' && <ActivityIndicator color={colors.primary} />}
-          {preview.status === 'error' && <Text style={styles.previewError}>불러오지 못했어요.</Text>}
-          {preview.status === 'loaded' && (
+          {(preview.date !== selectedDate || preview.status === 'loading') && (
+            <ActivityIndicator color={colors.primary} />
+          )}
+          {preview.date === selectedDate && preview.status === 'error' && (
+            <Text style={styles.previewError}>불러오지 못했어요.</Text>
+          )}
+          {preview.date === selectedDate && preview.status === 'loaded' && (
             <Text style={styles.previewSummary}>
               {preview.checkIns.length === 0
                 ? '이날은 남겨진 발자국이 없어요.'
-                : `체크인 ${preview.checkIns.length}개 · ${[...preview.checkIns]
-                    .sort((a, b) => Date.parse(a.checkedInAt) - Date.parse(b.checkedInAt))
-                    .map((checkIn) => formatLocalTime(checkIn.checkedInAt))
-                    .join(', ')}`}
+                : (() => {
+                    const times = [...preview.checkIns]
+                      .sort(byCheckedInAtAscending)
+                      .map((checkIn) => formatLocalTime(checkIn.checkedInAt));
+                    const timesLabel = times.length > MAX_PREVIEW_TIMES
+                      ? `${times.slice(0, MAX_PREVIEW_TIMES).join(', ')} 외 ${times.length - MAX_PREVIEW_TIMES}건`
+                      : times.join(', ');
+                    return `체크인 ${preview.checkIns.length}개 · ${timesLabel}`;
+                  })()}
             </Text>
           )}
           <Pressable
@@ -200,8 +211,8 @@ const styles = StyleSheet.create({
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendText: { fontSize: 13, color: colors.textMuted },
   summaryText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  preview: { padding: 16, borderRadius: 14, backgroundColor: colors.primarySoftBackground, gap: 8 },
-  previewDate: { fontSize: 17, fontFamily: fonts.display, color: colors.textPrimary },
+  preview: { padding: 16, borderRadius: 14, backgroundColor: colors.primarySoftBackground, gap: 8, minHeight: 96 },
+  previewDate: { fontSize: 17, color: colors.textPrimary },
   previewSummary: { fontSize: 13, color: colors.primarySoftText },
   previewError: { fontSize: 13, color: colors.error },
   previewLink: { alignSelf: 'flex-start' },

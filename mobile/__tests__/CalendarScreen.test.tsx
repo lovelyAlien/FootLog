@@ -1,9 +1,17 @@
 const mockPush = jest.fn();
 let mockRepository: { listLocalDatesWithCheckIns: jest.Mock; listByLocalDay: jest.Mock };
 
-jest.mock('expo-router', () => ({
-  useRouter: () => ({ push: mockPush }),
-}));
+jest.mock('expo-router', () => {
+  const { useEffect } = require('react');
+  return {
+    // calendar.tsx uses useFocusEffect so its effects re-run whenever the tab regains focus
+    // (see mobile/app/(tabs)/index.tsx for the same pattern). Unit tests never lose/regain
+    // focus, so mocking it as a plain mount/deps-driven useEffect reproduces the same
+    // observable behavior for these tests without needing to simulate navigation focus.
+    useFocusEffect: (effect: () => void | (() => void)) => useEffect(effect, [effect]),
+    useRouter: () => ({ push: mockPush }),
+  };
+});
 
 jest.mock('../src/database/FootLogContext', () => ({
   useFootLogRepository: () => mockRepository,
@@ -13,6 +21,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import CalendarRoute from '../app/(tabs)/calendar';
 import { localDateAndTimezone } from '../src/shared/localDate';
+import { formatLocalTime } from '../src/shared/formatLocalTime';
 
 describe('CalendarRoute', () => {
   beforeEach(() => {
@@ -33,6 +42,10 @@ describe('CalendarRoute', () => {
   });
 
   it('selects a date on tap and navigates to its day route via 자세히 보기', async () => {
+    const { localDate: today } = localDateAndTimezone();
+    const [, , todayDayString] = today.split('-');
+    const todayDay = Number(todayDayString);
+    const otherDay = (todayDay % 28) + 1; // always in every month, always different from todayDay
     mockRepository = {
       listLocalDatesWithCheckIns: jest.fn().mockResolvedValue([]),
       listByLocalDay: jest.fn().mockResolvedValue([]),
@@ -41,17 +54,18 @@ describe('CalendarRoute', () => {
     const view = await render(<CalendarRoute />);
     await waitFor(() => expect(mockRepository.listLocalDatesWithCheckIns).toHaveBeenCalled());
 
-    await fireEvent.press(view.getByRole('button', { name: / 1일$/ }));
+    await fireEvent.press(view.getByRole('button', { name: new RegExp(` ${otherDay}일$`) }));
 
     expect(mockPush).not.toHaveBeenCalled();
     await waitFor(() => expect(view.getByRole('button', { name: '자세히 보기' })).toBeTruthy());
 
     await fireEvent.press(view.getByRole('button', { name: '자세히 보기' }));
 
+    const expectedDateSuffix = `-${String(otherDay).padStart(2, '0')}`;
     expect(mockPush).toHaveBeenCalledWith(
       expect.objectContaining({
         pathname: '/day/[date]',
-        params: expect.objectContaining({ date: expect.stringMatching(/-01$/) }),
+        params: expect.objectContaining({ date: expect.stringMatching(new RegExp(`${expectedDateSuffix}$`)) }),
       }),
     );
   });
@@ -115,6 +129,9 @@ describe('CalendarRoute', () => {
   });
 
   it('shows an empty-state message and 자세히 보기 for a date with no check-ins', async () => {
+    const { localDate: today } = localDateAndTimezone();
+    const todayDay = Number(today.split('-')[2]);
+    const otherDay = (todayDay % 28) + 1; // always in every month, always different from todayDay
     mockRepository = {
       listLocalDatesWithCheckIns: jest.fn().mockResolvedValue([]),
       listByLocalDay: jest.fn().mockResolvedValue([]),
@@ -123,7 +140,7 @@ describe('CalendarRoute', () => {
     const view = await render(<CalendarRoute />);
     await waitFor(() => expect(mockRepository.listLocalDatesWithCheckIns).toHaveBeenCalled());
 
-    await fireEvent.press(view.getByRole('button', { name: / 1일$/ }));
+    await fireEvent.press(view.getByRole('button', { name: new RegExp(` ${otherDay}일$`) }));
 
     await waitFor(() => expect(view.getByText('이날은 남겨진 발자국이 없어요.')).toBeTruthy());
     expect(view.getByRole('button', { name: '자세히 보기' })).toBeTruthy();
@@ -161,5 +178,24 @@ describe('CalendarRoute', () => {
 
     await waitFor(() => expect(view.getByText('불러오지 못했어요.')).toBeTruthy());
     expect(view.getByText(/\d+년 \d+월/)).toBeTruthy();
+  });
+
+  it('lists multiple check-in times in ascending order', async () => {
+    const { localDate: today } = localDateAndTimezone();
+    const laterIso = `${today}T14:32:00.000Z`;
+    const earlierIso = `${today}T00:55:00.000Z`;
+    mockRepository = {
+      listLocalDatesWithCheckIns: jest.fn().mockResolvedValue([today]),
+      listByLocalDay: jest.fn().mockResolvedValue([
+        { id: 'a', checkedInAt: laterIso, latitude: 37.5, longitude: 127.0, accuracyM: 5, createdAt: laterIso, syncStatus: 'pending' },
+        { id: 'b', checkedInAt: earlierIso, latitude: 37.5, longitude: 127.0, accuracyM: 5, createdAt: earlierIso, syncStatus: 'pending' },
+      ]),
+    };
+
+    const view = await render(<CalendarRoute />);
+
+    await waitFor(() => expect(view.getByText(
+      new RegExp(`${formatLocalTime(earlierIso)}, ${formatLocalTime(laterIso)}`),
+    )).toBeTruthy());
   });
 });
