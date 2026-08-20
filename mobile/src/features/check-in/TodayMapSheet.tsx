@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ElementRef } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView from 'react-native-maps';
 import BottomSheet, { BottomSheetFlatList, type BottomSheetFlatListMethods } from '@gorhom/bottom-sheet';
 
@@ -32,6 +32,15 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
   const listRef = useRef<BottomSheetFlatListMethods>(null);
   const mapRef = useRef<ElementRef<typeof MapView>>(null);
   const hasMountedRef = useRef(false);
+  const [fabOpacity] = useState(() => new Animated.Value(1));
+
+  useEffect(() => {
+    Animated.timing(fabOpacity, {
+      toValue: sheetIndex === PEEK_INDEX ? 1 : 0,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [sheetIndex, fabOpacity]);
 
   // `initialRegion` is only honored by react-native-maps on first mount — changing the prop
   // afterward is a silent no-op (see MapView.d.ts). TodayMapSheet stays mounted across
@@ -96,7 +105,10 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
         onChange={setSheetIndex}
       >
         <View style={styles.sheetHeader}>
-          <Text style={styles.title}>오늘</Text>
+          <View>
+            <Text style={styles.title}>오늘</Text>
+            <Text style={styles.subtitle}>체크인 {chronologicalCheckIns.length}개</Text>
+          </View>
           {onOpenReminderSettings && (
             <Pressable
               accessibilityRole="button"
@@ -136,17 +148,21 @@ export function TodayMapSheet({ checkIns, initialRegion, onStartCheckIn, onOpenR
         )}
       </BottomSheet>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="지금 체크인"
-        onPress={onStartCheckIn}
+      <Animated.View
         // Hidden past the peek snap point: the expanded sheet's check-in list can scroll
         // under this fixed-position button, so it would otherwise overlap list rows.
         pointerEvents={sheetIndex === PEEK_INDEX ? 'auto' : 'none'}
-        style={[styles.fab, sheetIndex !== PEEK_INDEX && styles.fabHidden]}
+        style={[styles.fab, { opacity: fabOpacity }]}
       >
-        <Text style={styles.fabText}>＋</Text>
-      </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="지금 체크인"
+          onPress={onStartCheckIn}
+          style={styles.fabPressable}
+        >
+          <Text style={styles.fabText}>＋</Text>
+        </Pressable>
+      </Animated.View>
     </View>
   );
 }
@@ -162,15 +178,13 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.2,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 4,
   },
-  fabHidden: { opacity: 0 },
+  fabPressable: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fabText: { color: colors.onPrimary, fontSize: 28, fontWeight: '700', lineHeight: 30 },
   sheetHeader: {
     flexDirection: 'row',
@@ -180,6 +194,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   title: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  subtitle: { fontSize: 14, color: colors.textMuted },
   settingsButton: {
     borderRadius: 10,
     backgroundColor: colors.primarySoftBackground,
@@ -188,7 +203,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   settingsButtonText: { color: colors.primarySoftText, fontSize: 14, fontWeight: '700' },
-  mapCaption: { fontSize: 12, color: colors.textMuted, paddingHorizontal: 20, paddingBottom: 12 },
+  // textSecondary, not textMuted: this caption is the "these lines aren't a real
+  // route" disclaimer (core-ux-flow-design.md 5.1) — it must clear WCAG AA (4.5:1)
+  // against colors.background, which textMuted does not (still true after the
+  // DESIGN.md warm-palette update: textSecondary ~6.9:1, textMuted ~2.9:1).
+  mapCaption: { fontSize: 12, color: colors.textSecondary, paddingHorizontal: 20, paddingBottom: 12 },
   emptyState: { paddingHorizontal: 20, paddingBottom: 24, gap: 8 },
   emptyTitle: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
   emptyBody: { fontSize: 15, lineHeight: 22, color: colors.textSecondary },
