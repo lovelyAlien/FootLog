@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
+import { formatLocalTime } from '../../shared/formatLocalTime';
 import { colors, fonts } from '../../shared/theme';
 import type { CheckIn } from './domain';
 
@@ -8,10 +9,6 @@ type CheckInListRowProps = {
   isSelected: boolean;
   onPress: (id: string) => void;
 };
-
-function formatLocalTime(checkedInAt: string): string {
-  return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(checkedInAt));
-}
 
 export function CheckInListRow({ checkIn, isSelected, onPress }: CheckInListRowProps) {
   return (
