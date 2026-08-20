@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
+    "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo/ui": "~57.0.9",
     "@expo/vector-icons": "^15.1.1",
     "@gorhom/bottom-sheet": "^5.2.14",

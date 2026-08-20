@@ -1,3 +1,4 @@
+import { Fraunces_500Medium, useFonts } from '@expo-google-fonts/fraunces';
 import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRootNavigationState, useRouter } from 'expo-router';
@@ -44,6 +45,7 @@ export default function RootLayout() {
   const rootNavigationState = useRootNavigationState();
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<InitializationState>({ status: 'loading' });
+  const [fontsLoaded] = useFonts({ Fraunces_500Medium });
   const [pendingNotificationRoute, setPendingNotificationRoute] = useState<{
     url: '/check-in';
   } | null>(null);
@@ -115,7 +117,7 @@ export default function RootLayout() {
 
   let content: React.ReactNode;
 
-  if (state.status === 'loading') {
+  if (state.status === 'loading' || !fontsLoaded) {
     content = <LoadingState />;
   } else if (state.status === 'error') {
     content = (

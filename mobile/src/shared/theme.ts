@@ -1,25 +1,34 @@
+// Values follow DESIGN.md's light-mode palette (Organic/Natural direction).
 export const colors = {
-  background: '#ffffff',
+  background: '#faf7f2',
 
-  textPrimary: '#1b1b1b',
-  textSecondary: '#515151',
-  textMuted: '#8a8a8a',
+  textPrimary: '#221f1b',
+  textSecondary: '#5a554d',
+  textMuted: '#9a9186',
 
-  primary: '#2e6af0',
+  primary: '#3e6259',
   onPrimary: '#ffffff',
-  primarySoftBackground: '#eef2ff',
-  primarySoftText: '#2948a8',
+  primarySoftBackground: '#e9efe9',
+  primarySoftText: '#2c4a42',
+  mapRoute: '#a3c2b8',
 
-  border: '#e5e7eb',
-  borderMuted: '#c7cbd1',
+  border: '#e8e1d6',
+  borderMuted: '#d6cdbe',
 
-  buttonSecondaryText: '#3f4550',
-  buttonTertiaryText: '#6b7280',
+  buttonSecondaryText: '#4a453d',
+  buttonTertiaryText: '#7a7268',
 
-  optionBorder: '#d1d5db',
-  optionText: '#374151',
+  optionBorder: '#d9d0c2',
+  optionText: '#3a362f',
 
   error: '#b42318',
-  noticeBackground: '#fff7ed',
+  noticeBackground: '#fbf1e4',
   noticeText: '#7c2d12',
+} as const;
+
+// Display/data-table numeral font from DESIGN.md's Typography section — applied only to
+// standalone numerals (check-in times, calendar month title). Korean text stays on the
+// platform system font, so this never needs a Hangul-covering glyph set.
+export const fonts = {
+  display: 'Fraunces_500Medium',
 } as const;

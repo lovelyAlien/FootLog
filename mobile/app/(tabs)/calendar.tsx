@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useFootLogRepository } from '../../src/database/FootLogContext';
 import { localDateAndTimezone } from '../../src/shared/localDate';
-import { colors } from '../../src/shared/theme';
+import { colors, fonts } from '../../src/shared/theme';
 
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background, padding: 16, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   navText: { fontSize: 24, color: colors.primary, paddingHorizontal: 12 },
-  title: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
+  title: { fontSize: 26, fontFamily: fonts.display, color: colors.textPrimary },
   weekdayRow: { flexDirection: 'row' },
   weekdayLabel: { flex: 1, textAlign: 'center', fontSize: 13, color: colors.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
