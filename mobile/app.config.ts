@@ -35,6 +35,11 @@ const config: ExpoConfig = {
     ['expo-notifications', { defaultChannel: 'hourly-check-ins' }],
   ],
   experiments: { typedRoutes: true },
+  extra: {
+    eas: {
+      projectId: 'ef0f4f2b-e9b8-4aa2-90e8-b6f622aa3efa',
+    },
+  },
 };
 
 export default config;
