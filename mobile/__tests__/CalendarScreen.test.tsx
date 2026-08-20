@@ -157,7 +157,7 @@ describe('CalendarRoute', () => {
     const view = await render(<CalendarRoute />);
     await waitFor(() => expect(mockRepository.listByLocalDay).toHaveBeenCalledTimes(1));
 
-    await fireEvent.press(view.getByRole('button', { name: new RegExp(`${otherDay}일$`) }));
+    await fireEvent.press(view.getByRole('button', { name: new RegExp(` ${otherDay}일$`) }));
 
     await waitFor(() => expect(view.getByText('불러오지 못했어요.')).toBeTruthy());
     expect(view.getByText(/\d+년 \d+월/)).toBeTruthy();
