@@ -36,6 +36,7 @@ import { act, fireEvent, render, waitFor, within } from '@testing-library/react-
 
 import { DailyDetailScreen } from '../src/features/daily-reflection/DailyDetailScreen';
 import type { CheckIn } from '../src/features/check-in/domain';
+import { colors } from '../src/shared/theme';
 
 function buildCheckIn(overrides: Partial<CheckIn> & Pick<CheckIn, 'id' | 'checkedInAt'>): CheckIn {
   return {
@@ -133,7 +134,7 @@ describe('DailyDetailScreen', () => {
     await waitFor(() => {
       const timelineSlot = view.getByTestId('daily-detail-timeline-c-outside');
       const flattenedStyle = [timelineSlot.props.style].flat();
-      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: '#2e6af0' })]));
+      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: colors.primary })]));
     });
   });
 
@@ -152,7 +153,7 @@ describe('DailyDetailScreen', () => {
     await waitFor(() => {
       const timelineSlot = view.getByTestId('daily-detail-timeline-c1');
       const flattenedStyle = [timelineSlot.props.style].flat();
-      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: '#2e6af0' })]));
+      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: colors.primary })]));
     });
   });
 

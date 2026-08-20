@@ -19,6 +19,7 @@ import MapView from 'react-native-maps';
 
 import { CheckInMapPins } from '../src/features/check-in/CheckInMapPins';
 import type { CheckIn } from '../src/features/check-in/domain';
+import { colors } from '../src/shared/theme';
 
 function buildCheckIn(overrides: Partial<CheckIn> & Pick<CheckIn, 'id' | 'checkedInAt'>): CheckIn {
   return {
@@ -51,7 +52,7 @@ describe('CheckInMapPins', () => {
     expect(view.getByTestId('today-map-pin-c2')).toBeTruthy();
   });
 
-  it('colors only the selected pin with the primary color', async () => {
+  it('colors the selected pin with the primary color and unselected pins with the on-brand default', async () => {
     const checkIn1 = buildCheckIn({ id: 'c1', checkedInAt: '2026-08-16T09:00:00.000Z' });
     const checkIn2 = buildCheckIn({ id: 'c2', checkedInAt: '2026-08-16T10:00:00.000Z' });
     const view = await render(
@@ -65,8 +66,8 @@ describe('CheckInMapPins', () => {
       </MapView>,
     );
 
-    expect(view.getByTestId('today-map-pin-c1').props.pinColor).toBeUndefined();
-    expect(view.getByTestId('today-map-pin-c2').props.pinColor).toBe('#2e6af0');
+    expect(view.getByTestId('today-map-pin-c1').props.pinColor).toBe(colors.primarySoftText);
+    expect(view.getByTestId('today-map-pin-c2').props.pinColor).toBe(colors.primary);
   });
 
   it('calls onSelectCheckIn with the tapped check-in id', async () => {

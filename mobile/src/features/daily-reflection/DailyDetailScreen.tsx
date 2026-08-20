@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView from 'react-native-maps';
 
+import { formatLocalTime } from '../../shared/formatLocalTime';
 import { colors } from '../../shared/theme';
 import { CheckInMapPins } from '../check-in/CheckInMapPins';
 import type { CheckIn } from '../check-in/domain';
@@ -14,10 +15,6 @@ import { saveDailyReflection } from './saveDailyReflection';
 type DailyDetailScreenProps = {
   localDate: string;
 };
-
-function formatLocalTime(checkedInAt: string): string {
-  return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(checkedInAt));
-}
 
 function formatDuration(startedAt: string, endedAt: string): string {
   const totalMinutes = Math.round((Date.parse(endedAt) - Date.parse(startedAt)) / 60000);

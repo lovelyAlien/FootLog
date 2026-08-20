@@ -2,6 +2,7 @@ import { fireEvent, render } from '@testing-library/react-native';
 
 import { CheckInListRow } from '../src/features/check-in/CheckInListRow';
 import type { CheckIn } from '../src/features/check-in/domain';
+import { colors } from '../src/shared/theme';
 
 const checkIn: CheckIn = {
   id: 'c1',
@@ -26,7 +27,7 @@ describe('CheckInListRow', () => {
     const view = await render(<CheckInListRow checkIn={checkIn} isSelected onPress={jest.fn()} />);
 
     const flattenedStyle = [view.getByTestId('today-map-list-c1').props.style].flat();
-    expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: '#2e6af0' })]));
+    expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: colors.primary })]));
   });
 
   it('calls onPress with the check-in id when tapped', async () => {

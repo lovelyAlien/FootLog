@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 
-import { colors } from '../../shared/theme';
+import { formatLocalTime } from '../../shared/formatLocalTime';
+import { colors, fonts } from '../../shared/theme';
 import type { CheckIn } from './domain';
 
 type CheckInListRowProps = {
@@ -8,10 +9,6 @@ type CheckInListRowProps = {
   isSelected: boolean;
   onPress: (id: string) => void;
 };
-
-function formatLocalTime(checkedInAt: string): string {
-  return new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(checkedInAt));
-}
 
 export function CheckInListRow({ checkIn, isSelected, onPress }: CheckInListRowProps) {
   return (
@@ -31,6 +28,6 @@ export function CheckInListRow({ checkIn, isSelected, onPress }: CheckInListRowP
 const styles = StyleSheet.create({
   row: { borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, gap: 4 },
   rowSelected: { borderColor: colors.primary, backgroundColor: colors.primarySoftBackground },
-  time: { fontSize: 18, fontWeight: '700', color: colors.textPrimary },
+  time: { fontSize: 26, fontFamily: fonts.display, color: colors.textPrimary },
   accuracy: { fontSize: 14, color: colors.textSecondary },
 });

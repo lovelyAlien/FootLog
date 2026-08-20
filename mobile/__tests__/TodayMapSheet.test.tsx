@@ -57,6 +57,7 @@ import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import { TodayMapSheet } from '../src/features/check-in/TodayMapSheet';
 import type { CheckIn } from '../src/features/check-in/domain';
+import { colors } from '../src/shared/theme';
 
 const region = { latitude: 37.5665, longitude: 126.978, latitudeDelta: 0.02, longitudeDelta: 0.02 };
 
@@ -141,7 +142,7 @@ describe('TodayMapSheet', () => {
     await waitFor(() => {
       const row = view.getByTestId('today-map-list-c1');
       const flattenedStyle = [row.props.style].flat();
-      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: '#2e6af0' })]));
+      expect(flattenedStyle).toEqual(expect.arrayContaining([expect.objectContaining({ borderColor: colors.primary })]));
     });
   });
 
