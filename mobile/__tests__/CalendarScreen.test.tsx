@@ -144,6 +144,9 @@ describe('CalendarRoute', () => {
   });
 
   it('shows an inline preview error without breaking the grid when a manually selected date fails to load', async () => {
+    const { localDate: today } = localDateAndTimezone();
+    const todayDay = Number(today.split('-')[2]);
+    const otherDay = (todayDay % 28) + 1; // always in every month, always different from todayDay
     mockRepository = {
       listLocalDatesWithCheckIns: jest.fn().mockResolvedValue([]),
       listByLocalDay: jest.fn()
@@ -154,7 +157,7 @@ describe('CalendarRoute', () => {
     const view = await render(<CalendarRoute />);
     await waitFor(() => expect(mockRepository.listByLocalDay).toHaveBeenCalledTimes(1));
 
-    await fireEvent.press(view.getByRole('button', { name: / 1일$/ }));
+    await fireEvent.press(view.getByRole('button', { name: new RegExp(`${otherDay}일$`) }));
 
     await waitFor(() => expect(view.getByText('불러오지 못했어요.')).toBeTruthy());
     expect(view.getByText(/\d+년 \d+월/)).toBeTruthy();
